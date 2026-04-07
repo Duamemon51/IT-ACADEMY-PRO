@@ -63,8 +63,10 @@ export default function AdminSigninPage() {
         </div>
 
         <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl">
-          <h2 className="text-xl font-semibold text-white mb-2">Khush Aamdeed!</h2>
-          <p className="text-slate-400 text-sm mb-6">Admin panel access karne ke liye login karein</p>
+          <h2 className="text-xl font-semibold text-white mb-2">Welcome Back!</h2>
+         <p className="text-slate-400 text-sm mb-6">
+  Please log in to access the admin panel
+</p>
 
           {error && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 mb-5 flex items-center gap-2">
@@ -117,20 +119,20 @@ export default function AdminSigninPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Login ho raha hai...
+                    Logging in...
                 </>
               ) : (
-                'Login Karein'
+                'Login'
               )}
             </button>
           </form>
 
           <p className="text-center text-slate-400 text-sm mt-6">
-            Account nahi hai?{' '}
-            <Link href="/admin/signup" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
-              Sign Up Karein
-            </Link>
-          </p>
+  Don’t have an account?{' '}
+  <Link href="/admin/signup" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
+    Sign Up
+  </Link>
+</p>
         </div>
       </div>
     </div>
