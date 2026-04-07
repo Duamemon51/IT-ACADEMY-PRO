@@ -1,6 +1,6 @@
 'use client';
 // app/(admin)/admin/dashboard/page.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 
 interface Stats {
@@ -18,6 +18,25 @@ interface Employee {
   designation?: string;
   isActive: boolean;
   createdAt: string;
+}
+
+function AnimatedNumber({ value }: { value: number }) {
+  const [display, setDisplay] = useState(0);
+  const ref = useRef(false);
+  useEffect(() => {
+    if (ref.current) return;
+    ref.current = true;
+    let start = 0;
+    const duration = 900;
+    const step = (timestamp: number, startTime: number) => {
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(ease * value));
+      if (progress < 1) requestAnimationFrame(ts => step(ts, startTime));
+    };
+    requestAnimationFrame(ts => step(ts, ts));
+  }, [value]);
+  return <>{display}</>;
 }
 
 export default function DashboardPage() {
@@ -42,12 +61,8 @@ export default function DashboardPage() {
       if (data.success) {
         const employees: Employee[] = data.data.employees;
         const total = data.data.pagination.total;
-        const active = employees.filter((e) => e.isActive).length;
-        setStats({
-          totalEmployees: total,
-          activeEmployees: active,
-          inactiveEmployees: total - active,
-        });
+        const active = employees.filter(e => e.isActive).length;
+        setStats({ totalEmployees: total, activeEmployees: active, inactiveEmployees: total - active });
         setRecentEmployees(employees.slice(0, 5));
       }
     } catch (err) {
@@ -57,230 +72,261 @@ export default function DashboardPage() {
     }
   };
 
+  const today = new Date().toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
+
   const statCards = [
     {
       title: 'Total Employees',
       value: stats.totalEmployees,
-      description: 'Registered in system',
+      sub: 'Registered in system',
+      gradient: 'from-blue-500 to-indigo-600',
+      glow: 'shadow-blue-500/20',
+      border: 'border-blue-500/15',
+      bg: 'bg-blue-500/5',
+      text: 'text-blue-400',
       icon: (
-        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
         </svg>
       ),
-      bg: 'bg-blue-500/10',
-      iconBg: 'bg-blue-500/20',
-      iconColor: 'text-blue-400',
-      border: 'border-blue-500/20',
-      valueColor: 'text-blue-400',
     },
     {
-      title: 'Active Employees',
+      title: 'Active',
       value: stats.activeEmployees,
-      description: 'Currently working',
+      sub: 'Currently working',
+      gradient: 'from-emerald-500 to-teal-500',
+      glow: 'shadow-emerald-500/20',
+      border: 'border-emerald-500/15',
+      bg: 'bg-emerald-500/5',
+      text: 'text-emerald-400',
       icon: (
-        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       ),
-      bg: 'bg-emerald-500/10',
-      iconBg: 'bg-emerald-500/20',
-      iconColor: 'text-emerald-400',
-      border: 'border-emerald-500/20',
-      valueColor: 'text-emerald-400',
     },
     {
-      title: 'Inactive Employees',
+      title: 'Inactive',
       value: stats.inactiveEmployees,
-      description: 'Currently inactive',
+      sub: 'Not currently active',
+      gradient: 'from-red-500 to-rose-500',
+      glow: 'shadow-red-500/20',
+      border: 'border-red-500/15',
+      bg: 'bg-red-500/5',
+      text: 'text-red-400',
       icon: (
-        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
         </svg>
       ),
-      bg: 'bg-red-500/10',
-      iconBg: 'bg-red-500/20',
-      iconColor: 'text-red-400',
-      border: 'border-red-500/20',
-      valueColor: 'text-red-400',
+    },
+  ];
+
+  const quickActions = [
+    {
+      href: '/admin/employees',
+      title: 'Manage Employees',
+      sub: 'View, edit & manage all staff',
+      gradient: 'from-violet-500 to-purple-600',
+      glow: 'shadow-violet-500/15',
+      border: 'border-violet-500/15',
+      hoverBorder: 'hover:border-violet-500/40',
+      iconBg: 'bg-violet-500/10 group-hover:bg-violet-500/20',
+      iconColor: 'text-violet-400',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+        </svg>
+      ),
+    },
+    {
+      href: '/admin/attendance',
+      title: 'View Attendance',
+      sub: 'Track daily check-ins & hours',
+      gradient: 'from-emerald-500 to-teal-600',
+      glow: 'shadow-emerald-500/15',
+      border: 'border-emerald-500/15',
+      hoverBorder: 'hover:border-emerald-500/40',
+      iconBg: 'bg-emerald-500/10 group-hover:bg-emerald-500/20',
+      iconColor: 'text-emerald-400',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      ),
+    },
+    {
+      href: '/admin/tickets',
+      title: 'Review Tickets',
+      sub: 'Approve leave & overtime requests',
+      gradient: 'from-amber-500 to-orange-600',
+      glow: 'shadow-amber-500/15',
+      border: 'border-amber-500/15',
+      hoverBorder: 'hover:border-amber-500/40',
+      iconBg: 'bg-amber-500/10 group-hover:bg-amber-500/20',
+      iconColor: 'text-amber-400',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+        </svg>
+      ),
     },
   ];
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="flex flex-col items-center gap-4 text-slate-400">
-          <div className="relative">
-            <div className="w-12 h-12 rounded-full border-2 border-slate-700"></div>
-            <div className="w-12 h-12 rounded-full border-2 border-blue-500 border-t-transparent animate-spin absolute inset-0"></div>
+      <div className="flex items-center justify-center h-72">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative w-12 h-12">
+            <div className="absolute inset-0 rounded-full border-2 border-slate-800" />
+            <div className="absolute inset-0 rounded-full border-2 border-t-blue-500 border-r-indigo-500 border-transparent animate-spin" />
           </div>
-          <p className="text-sm">Loading dashboard...</p>
+          <p className="text-slate-500 text-sm">Loading dashboard...</p>
         </div>
       </div>
     );
   }
 
-  const today = new Date().toLocaleDateString('en-US', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  });
-
   return (
-    <div className="space-y-8">
+    <div className="space-y-7">
+      <style>{`
+        @keyframes slideUp { from { opacity: 0; transform: translateY(16px) } to { opacity: 1; transform: translateY(0) } }
+        .anim-1 { animation: slideUp 0.4s ease both 0.05s }
+        .anim-2 { animation: slideUp 0.4s ease both 0.1s }
+        .anim-3 { animation: slideUp 0.4s ease both 0.15s }
+        .anim-4 { animation: slideUp 0.4s ease both 0.2s }
+        .stat-card { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+        .stat-card:hover { transform: translateY(-3px); }
+        .action-card { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .action-card:hover { transform: translateY(-2px); }
+        .emp-row { transition: all 0.15s ease; }
+        .emp-row:hover { background: rgba(255,255,255,0.03); padding-left: 28px; }
+      `}</style>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 anim-1">
         <div>
-          <p className="text-slate-500 text-sm mb-1">{today}</p>
+          <p className="text-slate-600 text-xs mb-1.5">{today}</p>
           <h1 className="text-2xl font-bold text-white">
-            Welcome back, <span className="text-blue-400">{adminName}</span> 👋
+            Welcome back, <span className="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">{adminName}</span> 👋
           </h1>
-          <p className="text-slate-400 text-sm mt-1">Here&apos;s an overview of your attendance system.</p>
+          <p className="text-slate-500 text-sm mt-1">Here&apos;s what&apos;s happening in your system today.</p>
         </div>
         <Link
-          href="/admin/employees/new"
-          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl font-medium text-sm transition-all shadow-lg shadow-blue-500/20"
+          href="/admin/employees"
+          className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-4 py-2.5 rounded-xl font-medium text-sm transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:-translate-y-0.5 active:translate-y-0"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
           </svg>
           Add Employee
         </Link>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {statCards.map((card) => (
+      {/* Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 anim-2">
+        {statCards.map((card, i) => (
           <div
             key={card.title}
-            className={`${card.bg} border ${card.border} rounded-2xl p-6 flex items-center gap-5 hover:scale-[1.02] transition-transform`}
+            className={`stat-card ${card.bg} border ${card.border} rounded-2xl p-5 flex items-center gap-4 shadow-lg ${card.glow}`}
           >
-            <div className={`${card.iconBg} ${card.iconColor} w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0`}>
-              {card.icon}
+            <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${card.gradient} flex items-center justify-center flex-shrink-0 shadow-lg ${card.glow}`}>
+              <span className="text-white">{card.icon}</span>
             </div>
             <div>
-              <p className="text-slate-400 text-sm">{card.title}</p>
-              <p className={`text-3xl font-bold ${card.valueColor} mt-0.5`}>{card.value}</p>
-              <p className="text-slate-500 text-xs mt-0.5">{card.description}</p>
+              <p className="text-slate-500 text-xs font-medium">{card.title}</p>
+              <p className={`text-3xl font-bold ${card.text} mt-0.5 tabular-nums`}>
+                <AnimatedNumber value={card.value} />
+              </p>
+              <p className="text-slate-600 text-[11px] mt-0.5">{card.sub}</p>
             </div>
           </div>
         ))}
       </div>
 
+      {/* Quick Actions */}
+      <div className="anim-3">
+        <p className="text-slate-600 text-[11px] font-bold uppercase tracking-[0.1em] mb-3">Quick Actions</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {quickActions.map(action => (
+            <Link
+              key={action.href}
+              href={action.href}
+              className={`action-card group bg-white/2 border ${action.border} ${action.hoverBorder} rounded-2xl p-4 flex items-center gap-3 shadow-sm ${action.glow}`}
+            >
+              <div className={`w-10 h-10 rounded-xl ${action.iconBg} ${action.iconColor} flex items-center justify-center flex-shrink-0 transition-all`}>
+                {action.icon}
+              </div>
+              <div className="min-w-0">
+                <p className="text-white text-sm font-semibold group-hover:text-white transition-colors">{action.title}</p>
+                <p className="text-slate-500 text-xs truncate mt-0.5">{action.sub}</p>
+              </div>
+              <svg className="w-4 h-4 text-slate-600 group-hover:text-slate-400 ml-auto flex-shrink-0 transition-all group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          ))}
+        </div>
+      </div>
+
       {/* Recent Employees */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-500/10 rounded-lg flex items-center justify-center">
-              <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+      <div className="anim-4 rounded-2xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(99,102,241,0.08)' }}>
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid rgba(99,102,241,0.07)' }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center">
+              <svg className="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
               </svg>
             </div>
-            <h2 className="font-semibold text-white">Recently Added Employees</h2>
+            <h2 className="font-semibold text-white text-sm">Recent Employees</h2>
           </div>
-          <Link href="/admin/employees" className="text-blue-400 hover:text-blue-300 text-sm transition-colors flex items-center gap-1">
+          <Link href="/admin/employees" className="text-blue-400 hover:text-blue-300 text-xs font-medium transition-colors flex items-center gap-1">
             View all
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
           </Link>
         </div>
 
         {recentEmployees.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-slate-500">
-            <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+          <div className="flex flex-col items-center justify-center py-14 text-slate-600">
+            <div className="w-14 h-14 rounded-2xl bg-white/3 flex items-center justify-center mb-3">
+              <svg className="w-7 h-7 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </div>
-            <p className="font-medium text-slate-400">No employees yet</p>
-            <p className="text-sm mt-1 text-slate-600">Get started by adding your first employee</p>
-            <Link
-              href="/admin/employees/new"
-              className="mt-4 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add First Employee
-            </Link>
+            <p className="text-slate-400 text-sm font-medium">No employees yet</p>
+            <Link href="/admin/employees" className="mt-3 text-blue-400 hover:text-blue-300 text-xs transition-colors">Add your first employee →</Link>
           </div>
         ) : (
-          <div className="divide-y divide-slate-800">
-            {recentEmployees.map((emp) => (
-              <div key={emp._id} className="flex items-center gap-4 px-6 py-4 hover:bg-slate-800/50 transition-colors group">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg">
-                  <span className="text-white text-sm font-bold">
-                    {emp.name.charAt(0).toUpperCase()}
-                  </span>
+          <div>
+            {recentEmployees.map((emp, i) => (
+              <div
+                key={emp._id}
+                className="emp-row flex items-center gap-3.5 px-5 py-3.5"
+                style={{ borderBottom: i < recentEmployees.length - 1 ? '1px solid rgba(99,102,241,0.05)' : 'none', transition: 'all 0.2s ease' }}
+              >
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-500/20">
+                  <span className="text-white text-xs font-bold">{emp.name.charAt(0).toUpperCase()}</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-white font-medium text-sm truncate">{emp.name}</p>
-                  <p className="text-slate-500 text-xs truncate mt-0.5">
-                    <code className="text-blue-400/70">{emp.employeeId}</code>
-                    {emp.department && <span> · {emp.department}</span>}
-                    {emp.designation && <span> · {emp.designation}</span>}
+                  <p className="text-white text-sm font-medium truncate">{emp.name}</p>
+                  <p className="text-slate-500 text-xs flex items-center gap-1.5 mt-0.5">
+                    <code className="text-blue-400/70 text-[10px]">{emp.employeeId}</code>
+                    {emp.department && <><span className="text-slate-700">·</span><span>{emp.department}</span></>}
                   </p>
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${emp.isActive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                    {emp.isActive ? '● Active' : '● Inactive'}
-                  </span>
-                  <Link
-                    href={`/admin/employees/${emp._id}`}
-                    className="text-slate-600 hover:text-blue-400 transition-colors group-hover:text-slate-400"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Link>
-                </div>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 ${emp.isActive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                  <span className={`w-1 h-1 rounded-full ${emp.isActive ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                  {emp.isActive ? 'Active' : 'Inactive'}
+                </span>
               </div>
             ))}
           </div>
         )}
       </div>
-
-      {/* Quick Actions */}
-      <div>
-        <h2 className="text-slate-400 text-sm font-medium uppercase tracking-wider mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Link
-            href="/admin/employees/new"
-            className="group bg-slate-900 border border-slate-800 hover:border-blue-500/50 rounded-2xl p-6 flex items-center gap-4 transition-all hover:bg-slate-800/50"
-          >
-            <div className="w-12 h-12 bg-blue-500/10 group-hover:bg-blue-500/20 rounded-xl flex items-center justify-center transition-colors flex-shrink-0">
-              <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-              </svg>
-            </div>
-            <div>
-              <p className="font-semibold text-white group-hover:text-blue-400 transition-colors">Add New Employee</p>
-              <p className="text-slate-500 text-sm mt-0.5">Create account with QR code</p>
-            </div>
-            <svg className="w-4 h-4 text-slate-600 group-hover:text-blue-400 ml-auto transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </Link>
-
-          <Link
-            href="/admin/employees"
-            className="group bg-slate-900 border border-slate-800 hover:border-purple-500/50 rounded-2xl p-6 flex items-center gap-4 transition-all hover:bg-slate-800/50"
-          >
-            <div className="w-12 h-12 bg-purple-500/10 group-hover:bg-purple-500/20 rounded-xl flex items-center justify-center transition-colors flex-shrink-0">
-              <svg className="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-              </svg>
-            </div>
-            <div>
-              <p className="font-semibold text-white group-hover:text-purple-400 transition-colors">View All Employees</p>
-              <p className="text-slate-500 text-sm mt-0.5">Manage your employee list</p>
-            </div>
-            <svg className="w-4 h-4 text-slate-600 group-hover:text-purple-400 ml-auto transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </Link>
-        </div>
-      </div>
-
     </div>
   );
 }
