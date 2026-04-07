@@ -644,30 +644,38 @@ export default function EmployeesPage() {
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
   const [deleteEmployee, setDeleteEmployee] = useState<Employee | null>(null);
 
-  const fetchEmployees = useCallback(async (page = 1) => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('admin_token');
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '10',
-        ...(search && { search }),
-        ...(filterActive !== '' && { isActive: filterActive }),
-      });
-      const res = await fetch(`/api/employees?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) {
-        setEmployees(data.data.employees);
-        setPagination(data.data.pagination);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
+ const fetchEmployees = useCallback(async (page = 1) => {
+  setLoading(true);
+  try {
+    const token = localStorage.getItem('admin_token');
+    if (!token) {
       setLoading(false);
+      return;
     }
-  }, [search, filterActive]);
+
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: '10',
+      ...(search && { search }),
+      ...(filterActive !== '' && { isActive: filterActive }),
+    });
+
+    const res = await fetch(`/api/employees?${params}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (data.success) {
+      setEmployees(data.data.employees);
+      setPagination(data.data.pagination);
+    } else {
+      console.error('Fetch failed:', data.message);
+    }
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setLoading(false);
+  }
+}, [search, filterActive]);
 
   useEffect(() => {
     const timeout = setTimeout(() => fetchEmployees(1), 300);

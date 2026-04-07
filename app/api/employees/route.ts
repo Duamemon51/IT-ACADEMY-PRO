@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Employee from '@/models/Employee';
+import '@/models/Admin'; // populate ke liye zaroori hai
 import { getAdminFromRequest } from '@/lib/authMiddleware';
 import {
   generateEmployeeId,
