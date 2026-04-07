@@ -8,9 +8,11 @@ import jwt from 'jsonwebtoken';
 // =====================
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params; // ✅ unwrap params
+
     await connectDB();
 
     const token = req.headers.get('authorization')?.split(' ')[1];
@@ -41,7 +43,7 @@ export async function PATCH(
     }
 
     const ticket = await Ticket.findByIdAndUpdate(
-      params.id,
+      id, // ✅ use unwrapped id
       {
         status,
         reviewedBy: decoded.id,

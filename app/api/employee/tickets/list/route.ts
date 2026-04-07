@@ -8,9 +8,11 @@ import jwt from "jsonwebtoken";
 // =====================
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params; // ✅ IMPORTANT
+
     await connectDB();
 
     const token = req.headers.get("authorization")?.split(" ")[1];
@@ -27,7 +29,7 @@ export async function PUT(
     const { status } = await req.json();
 
     const ticket = await Ticket.findByIdAndUpdate(
-      params.id,
+      id, // ✅ use extracted id
       { status },
       { new: true }
     );
@@ -44,6 +46,7 @@ export async function PUT(
       message: "Status updated",
       data: ticket,
     });
+
   } catch (err) {
     return NextResponse.json(
       { success: false, message: "Server error" },
