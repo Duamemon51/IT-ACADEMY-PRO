@@ -33,7 +33,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const router   = useRouter();
   const pathname = usePathname();
   const { isDark: d, toggle: toggleTheme } = useTheme();
-
+const [image, setImage] = useState<string | null>(null);
   const [employee, setEmployee]       = useState<Employee | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [time, setTime]               = useState('');
@@ -96,19 +96,42 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           <div className="flex flex-col h-full pt-7 pb-5 px-4">
             {/* Brand */}
             <div className="flex items-center gap-3 mb-8 px-1">
-              <div className="relative w-9 h-9 flex-shrink-0">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-[#0f1018]"
-                  style={{ boxShadow: '0 0 0 1px rgba(99,102,241,0.5), 0 0 24px rgba(99,102,241,0.22), inset 0 1px 0 rgba(255,255,255,0.07)' }}>
-                  <span className="text-[11px] font-black text-white italic tracking-tight">IT</span>
-                </div>
-                <span className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 ${d ? 'border-[#0a0b10]' : 'border-white'}`}
-                  style={{ boxShadow: '0 0 8px rgba(52,211,153,0.7)' }} />
-              </div>
-              <div>
-                <p className={`text-[12px] font-black tracking-tight ${d ? 'text-white' : 'text-slate-900'}`}>ACADEMY PRO</p>
-                <p className="text-[8px] tracking-[0.4em] font-semibold text-indigo-400 uppercase mt-0.5">Employee Portal</p>
-              </div>
-            </div>
+      <div className="flex items-center gap-3">
+  {/* Logo */}
+  <div className="relative w-16 h-9 flex-shrink-0">
+    <div
+      className="w-full h-full rounded-xl overflow-hidden flex items-center justify-center bg-[#0f1018]"
+      style={{
+        boxShadow:
+          '0 0 0 1px rgba(99,102,241,0.5), 0 0 24px rgba(99,102,241,0.22), inset 0 1px 0 rgba(255,255,255,0.07)'
+      }}
+    >
+      <img
+        src="/logo.webp"
+        alt="logo"
+        className="w-full h-full object-contain"
+      />
+    </div>
+
+    <span
+      className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 ${
+        d ? 'border-[#0a0b10]' : 'border-white'
+      }`}
+      style={{ boxShadow: '0 0 8px rgba(52,211,153,0.7)' }}
+    />
+  </div>
+
+  {/* Text */}
+  <div>
+    <p className={`text-sm font-black leading-tight ${d ? 'text-white' : 'text-slate-900'}`}>
+      IT ACADEMY PRO
+    </p>
+    <p className="text-[10px] tracking-[0.2em] font-semibold text-indigo-400 uppercase mt-0.5">
+      Employee Portal
+    </p>
+  </div>
+</div>
+</div>
 
             {/* Clock */}
             <div className={`flex items-center justify-between mb-5 px-3 py-2 rounded-xl text-[10px] font-mono transition-colors
