@@ -23,34 +23,52 @@ async function saveImage(base64: string, fileName: string) {
 }
 
 //
-// GET SINGLE EMPLOYEE
+// ✅ GET SINGLE EMPLOYEE (FIXED)
 //
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const adminPayload = getAdminFromRequest(req);
     if (!adminPayload) {
-      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
     await connectDB();
 
-    const employee = await Employee.findById(params.id)
+    // ✅ IMPORTANT FIX
+    const { id } = await params;
+
+    const employee = await Employee.findById(id)
       .select('-password')
       .populate('createdBy', 'name email');
 
     if (!employee) {
-      return NextResponse.json({ success: false, message: 'Employee nahi mila' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, message: 'Employee nahi mila' },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json({ success: true, data: { employee } });
+    return NextResponse.json({
+      success: true,
+      data: { employee },
+    });
   } catch (error) {
     console.error('Get employee error:', error);
-    return NextResponse.json({ success: false, message: 'Server error' }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: 'Server error' },
+      { status: 500 }
+    );
   }
 }
 
 //
-// UPDATE EMPLOYEE
+// ✅ UPDATE EMPLOYEE (ALREADY CORRECT - CLEANED)
 //
 export async function PUT(
   req: NextRequest,
@@ -67,9 +85,7 @@ export async function PUT(
 
     await connectDB();
 
-    // ✅ FIX: await params
     const { id } = await params;
-
     const body = await req.json();
 
     const employee = await Employee.findById(id);
@@ -91,23 +107,17 @@ export async function PUT(
       designation,
       companyEmail,
       isActive,
-
       bankAccountNo,
       bankAccountTitle,
-
       joiningDate,
-
       basicPay,
       adjustment,
       deduction,
-
       cnicFrontImage,
       cnicBackImage,
     } = body;
 
-    //
-    // CNIC UPDATE
-    //
+    // CNIC
     if (cnic && cnic !== employee.cnic) {
       if (!validateCNIC(cnic)) {
         return NextResponse.json(
@@ -133,9 +143,7 @@ export async function PUT(
       employee.cnic = formattedCNIC;
     }
 
-    //
-    // EMAIL UPDATE
-    //
+    // EMAIL
     if (email && email !== employee.email) {
       const lowerEmail = email.toLowerCase();
 
@@ -154,9 +162,7 @@ export async function PUT(
       employee.email = lowerEmail;
     }
 
-    //
-    // TEXT FIELDS
-    //
+    // TEXT
     if (name) employee.name = name.trim();
     if (phone !== undefined) employee.phone = phone?.trim();
     if (alternatePhone !== undefined) employee.alternatePhone = alternatePhone?.trim();
@@ -166,9 +172,7 @@ export async function PUT(
       employee.companyEmail = companyEmail?.toLowerCase()?.trim();
     }
 
-    //
     // BANK
-    //
     if (bankAccountNo !== undefined) {
       employee.bankAccountNo = bankAccountNo?.trim();
     }
@@ -176,28 +180,20 @@ export async function PUT(
       employee.bankAccountTitle = bankAccountTitle?.trim();
     }
 
-    //
     // DATE
-    //
     if (joiningDate) {
       employee.joiningDate = new Date(joiningDate);
     }
 
-    //
     // SALARY
-    //
     if (basicPay !== undefined) employee.basicPay = basicPay;
     if (adjustment !== undefined) employee.adjustment = adjustment;
     if (deduction !== undefined) employee.deduction = deduction;
 
-    //
     // STATUS
-    //
     if (isActive !== undefined) employee.isActive = isActive;
 
-    //
     // IMAGES
-    //
     if (cnicFrontImage) {
       employee.cnicFrontImage = await saveImage(
         cnicFrontImage,
@@ -227,8 +223,9 @@ export async function PUT(
     );
   }
 }
+
 //
-// DELETE EMPLOYEE
+// ✅ DELETE EMPLOYEE (ALREADY CORRECT)
 //
 export async function DELETE(
   req: NextRequest,
@@ -237,12 +234,14 @@ export async function DELETE(
   try {
     const adminPayload = getAdminFromRequest(req);
     if (!adminPayload) {
-      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
     await connectDB();
 
-    // ✅ IMPORTANT FIX
     const { id } = await params;
 
     const employee = await Employee.findByIdAndDelete(id);
@@ -260,6 +259,9 @@ export async function DELETE(
     });
   } catch (error) {
     console.error('Delete employee error:', error);
-    return NextResponse.json({ success: false, message: 'Server error' }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: 'Server error' },
+      { status: 500 }
+    );
   }
 }
