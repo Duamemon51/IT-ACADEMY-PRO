@@ -1,265 +1,224 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
+import { useTheme } from '../ThemeContext';
 
 interface AttendanceRecord {
-  _id?: string;
-  date: string;
-  checkIn?: string;
-  checkOut?: string;
-  status: 'present' | 'late' | 'absent' | 'half-day' | 'off';
-  notes?: string;
+  _id?: string; date: string; checkIn?: string; checkOut?: string;
+  status: 'present' | 'late' | 'absent' | 'half-day' | 'off'; notes?: string;
 }
+interface Pagination { total: number; page: number; limit: number; totalPages: number; }
 
-interface Pagination {
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
+const STATUS_DOT: Record<string, string> = {
+  present: '#34d399', late: '#fbbf24', absent: '#f87171', 'half-day': '#fb923c', off: '#64748b',
+};
+const STATUS_GLOW: Record<string, string> = {
+  present: 'rgba(52,211,153,0.6)', late: 'rgba(251,191,36,0.6)', absent: 'rgba(248,113,113,0.6)',
+  'half-day': 'rgba(251,146,60,0.6)', off: 'rgba(100,116,139,0.4)',
+};
+const STATUS_BADGE: Record<string, string> = {
+  present:    'bg-emerald-500/10 text-emerald-400 border-emerald-500/25',
+  late:       'bg-amber-500/10   text-amber-400   border-amber-500/25',
+  absent:     'bg-rose-500/10    text-rose-400    border-rose-500/25',
+  'half-day': 'bg-orange-500/10  text-orange-400  border-orange-500/25',
+  off:        'bg-slate-500/10   text-slate-400   border-slate-400/25',
+};
+
+function fmtPK(d?: string) {
+  if (!d) return '—';
+  return new Date(d).toLocaleTimeString('en-PK', { timeZone: 'Asia/Karachi', hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase();
+}
+function calcHrs(ci?: string, co?: string) {
+  if (!ci || !co) return '—';
+  return `${((new Date(co).getTime() - new Date(ci).getTime()) / 3_600_000).toFixed(2)}h`;
+}
+function fmtDate(s: string, opts: Intl.DateTimeFormatOptions) {
+  return new Date(s + 'T12:00:00Z').toLocaleDateString('en-PK', { timeZone: 'UTC', ...opts });
 }
 
 export default function AttendancePage() {
-  const [records, setRecords]     = useState<AttendanceRecord[]>([]);
-  const [pagination, setPagination] = useState<Pagination>({
-    total: 0, page: 1, limit: 15, totalPages: 0,
-  });
-  const [loading, setLoading] = useState(true);
-
+  const { isDark: d } = useTheme();
+  const [records, setRecords]       = useState<AttendanceRecord[]>([]);
+  const [pagination, setPagination] = useState<Pagination>({ total: 0, page: 1, limit: 15, totalPages: 0 });
+  const [loading, setLoading]       = useState(true);
   const [month, setMonth] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
   });
-
-  // ✅ PKT time display
-  const formatPKTimeOnly = (dateString?: string) => {
-    if (!dateString) return '—';
-    return new Date(dateString).toLocaleTimeString('en-PK', {
-      timeZone: 'Asia/Karachi',
-      hour:     '2-digit',
-      minute:   '2-digit',
-      second:   '2-digit',
-      hour12:   true,
-    }).toLowerCase();
-  };
-
-  // ✅ Worked hours
-  const calculateHours = (checkIn?: string, checkOut?: string) => {
-    if (!checkIn || !checkOut) return '—';
-    const diff  = new Date(checkOut).getTime() - new Date(checkIn).getTime();
-    const hours = diff / (1000 * 60 * 60);
-    return `${hours.toFixed(2)}h`;
-  };
-
-  // ✅ Format date string (YYYY-MM-DD) safely without timezone shift
-  const formatDate = (dateStr: string, options: Intl.DateTimeFormatOptions) => {
-    // Parse as UTC noon to avoid any date shifting in any timezone
-    const d = new Date(dateStr + 'T12:00:00Z');
-    return d.toLocaleDateString('en-PK', { timeZone: 'UTC', ...options });
-  };
 
   const fetchRecords = useCallback(async (page = 1) => {
     setLoading(true);
     try {
-      const token  = localStorage.getItem('employee_token');
-      const params = new URLSearchParams({
-        page:  page.toString(),
-        limit: '15',
-        month,
-      });
-
-      const res  = await fetch(`/api/employee/attendance?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const token = localStorage.getItem('employee_token');
+      const params = new URLSearchParams({ page: page.toString(), limit: '15', month });
+      const res  = await fetch(`/api/employee/attendance?${params}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
-
-      if (data.success) {
-        setRecords(data.data.records);
-        setPagination(data.data.pagination);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+      if (data.success) { setRecords(data.data.records); setPagination(data.data.pagination); }
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
   }, [month]);
 
-  useEffect(() => {
-    fetchRecords(1);
-  }, [fetchRecords]);
+  useEffect(() => { fetchRecords(1); }, [fetchRecords]);
 
-  // Only show up to today (PKT)
-  const pkToday = new Date(
-    new Date().getTime() + 5 * 60 * 60 * 1000
-  ).toISOString().split('T')[0];
+  const pkToday  = new Date(Date.now() + 5 * 3_600_000).toISOString().split('T')[0];
+  const filtered = (records || []).filter(r => r?.date && r.date <= pkToday);
 
-  const filteredRecords = (records || []).filter(
-    (rec) => rec?.date && rec.date <= pkToday
-  );
-
-  // =====================
-  // STATUS STYLE
-  // =====================
-  const statusStyle = (s: string) => {
-    switch (s) {
-      case 'present':  return { dot: 'bg-green-400',  badge: 'bg-green-500/10 text-green-400 border border-green-500/20' };
-      case 'late':     return { dot: 'bg-yellow-400', badge: 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' };
-      case 'absent':   return { dot: 'bg-red-400',    badge: 'bg-red-500/10 text-red-400 border border-red-500/20' };
-      case 'half-day': return { dot: 'bg-orange-400', badge: 'bg-orange-500/10 text-orange-400 border border-orange-500/20' };
-      case 'off':      return { dot: 'bg-slate-500',  badge: 'bg-slate-500/10 text-slate-400 border border-slate-600/30' };
-      default:         return { dot: 'bg-slate-500',  badge: 'bg-slate-500/10 text-slate-400 border border-slate-600/30' };
-    }
+  const counts = {
+    present: filtered.filter(r => r.status === 'present').length,
+    late:    filtered.filter(r => r.status === 'late').length,
+    absent:  filtered.filter(r => r.status === 'absent').length,
+    half:    filtered.filter(r => r.status === 'half-day').length,
+    off:     filtered.filter(r => r.status === 'off').length,
   };
+  const workDays = counts.present + counts.late + counts.half;
+  const rate = workDays + counts.absent > 0 ? Math.round((workDays / (workDays + counts.absent)) * 100) : 0;
 
-  const statusLabel = (s: string) => {
-    if (s === 'half-day') return 'Half Day';
-    return s.charAt(0).toUpperCase() + s.slice(1);
-  };
+  // Theme tokens
+  const card  = d ? 'bg-[#0c0d14]/80 border-white/[0.08]' : 'bg-white/90 border-slate-200/80';
+  const tp    = d ? 'text-white'     : 'text-slate-900';
+  const ts    = d ? 'text-slate-500' : 'text-slate-500';
+  const tt    = d ? 'text-slate-600' : 'text-slate-400';
+  const div   = d ? 'border-white/[0.07]' : 'border-slate-100';
+  const hover = d ? 'hover:bg-white/[0.03]' : 'hover:bg-slate-50/70';
+  const thBg  = d ? 'bg-white/[0.03] border-white/[0.07]' : 'bg-slate-50 border-slate-100';
+  const track = d ? 'bg-white/[0.06]' : 'bg-slate-100';
+  const inputCls = d
+    ? 'bg-[#0c0d14] border-white/[0.1] text-white focus:border-indigo-500/70 focus:bg-white/[0.05]'
+    : 'bg-white border-slate-200 text-slate-900 focus:border-indigo-400 shadow-sm';
 
-  // =====================
-  // STATS
-  // =====================
-  const presentCount  = filteredRecords.filter((r) => r.status === 'present').length;
-  const lateCount     = filteredRecords.filter((r) => r.status === 'late').length;
-  const absentCount   = filteredRecords.filter((r) => r.status === 'absent').length;
-  const halfDayCount  = filteredRecords.filter((r) => r.status === 'half-day').length;
-  const offCount      = filteredRecords.filter((r) => r.status === 'off').length;
-
-  const stats = [
-    { label: 'Present',  count: presentCount,  color: 'text-green-400',  bg: 'bg-green-500/10',  border: 'border-green-500/20' },
-    { label: 'Late',     count: lateCount,      color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
-    { label: 'Absent',   count: absentCount,    color: 'text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20' },
-    { label: 'Half Day', count: halfDayCount,   color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
-    { label: 'Off',      count: offCount,       color: 'text-slate-400',  bg: 'bg-slate-500/10',  border: 'border-slate-600/30' },
+  const statTiles = [
+    { label: 'Present',  value: counts.present, color: '#34d399', glow: 'rgba(52,211,153,0.5)' },
+    { label: 'Late',     value: counts.late,     color: '#fbbf24', glow: 'rgba(251,191,36,0.5)' },
+    { label: 'Absent',   value: counts.absent,   color: '#f87171', glow: 'rgba(248,113,113,0.5)' },
+    { label: 'Half Day', value: counts.half,     color: '#fb923c', glow: 'rgba(251,146,60,0.5)' },
+    { label: 'Days Off', value: counts.off,      color: '#64748b', glow: 'rgba(100,116,139,0.4)' },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5" style={{ fontFamily: "'DM Sans',system-ui,sans-serif" }}>
 
-      {/* HEADER */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">My Attendance</h1>
-          <p className="text-slate-400 text-sm mt-1">View your attendance history</p>
+          <p className="text-[9px] font-bold tracking-[0.4em] text-indigo-400 uppercase mb-1.5">Registry</p>
+          <h1 className={`text-2xl font-black tracking-tight ${tp}`}>Attendance Log</h1>
+          <p className={`text-sm mt-1 ${ts}`}>Your complete check-in / check-out history</p>
         </div>
-
-        <input
-          type="month"
-          value={month}
-          onChange={(e) => { setMonth(e.target.value); }}
-          className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-        />
+        <div className="flex items-center gap-2.5 flex-shrink-0">
+          <span className={`text-[9px] uppercase tracking-widest font-semibold ${tt}`}>Period</span>
+          <input type="month" value={month} onChange={e => setMonth(e.target.value)}
+            className={`border rounded-xl px-4 py-2 text-sm focus:outline-none transition-all ${inputCls}`} />
+        </div>
       </div>
 
-      {/* STATS */}
-      <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-        {stats.map(({ label, count, color, bg, border }) => (
-          <div key={label} className={`${bg} border ${border} rounded-2xl p-4 text-center`}>
-            <p className={`text-2xl font-bold ${color}`}>{count}</p>
-            <p className="text-slate-400 text-xs mt-0.5">{label}</p>
+      {/* Stat tiles */}
+      <div className="grid grid-cols-5 gap-3">
+        {statTiles.map(s => (
+          <div key={s.label} className={`relative rounded-2xl border p-4 text-center overflow-hidden transition-all duration-300 hover:scale-[1.02] cursor-default ${card}`}
+            style={{ boxShadow: d ? '0 4px 20px rgba(0,0,0,0.3)' : '0 2px 10px rgba(0,0,0,0.06)' }}>
+            {/* Top dot accent */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 h-[3px] w-12 rounded-b-full"
+              style={{ background: s.color, boxShadow: `0 0 12px ${s.glow}` }} />
+            {/* Background glow blob */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-16 rounded-full opacity-[0.08] blur-xl"
+              style={{ background: s.color }} />
+            <p className={`text-3xl font-black relative z-10 ${tp}`} style={{ textShadow: d ? `0 0 30px ${s.glow}` : 'none' }}>{s.value}</p>
+            <p className={`text-[9px] font-bold mt-1 uppercase tracking-wider relative z-10 ${ts}`}>{s.label}</p>
           </div>
         ))}
       </div>
 
-      {/* TABLE */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-16 text-slate-400 text-sm">
-            Loading...
+      {/* Rate bar */}
+      <div className={`rounded-2xl border px-6 py-5 transition-all duration-300 ${card}`}
+        style={{ boxShadow: d ? '0 4px 20px rgba(0,0,0,0.3)' : '0 2px 10px rgba(0,0,0,0.06)' }}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <span className={`text-[10px] font-bold uppercase tracking-[0.3em] ${ts}`}>Punctuality Rate</span>
+            <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full ${d ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/25' : 'bg-indigo-50 text-indigo-600 border border-indigo-200'}`}>
+              {workDays} work days
+            </span>
           </div>
-        ) : filteredRecords.length === 0 ? (
-          <div className="text-center py-16 text-slate-500 text-sm">No records found</div>
+          <span className={`text-lg font-black ${tp}`} style={{ textShadow: d ? '0 0 20px rgba(129,140,248,0.5)' : 'none', color: '#818cf8' }}>{rate}%</span>
+        </div>
+        <div className={`h-2.5 w-full rounded-full overflow-hidden ${track}`}>
+          <div className="h-full rounded-full transition-all duration-1000 relative overflow-hidden"
+            style={{ width: `${rate}%`, background: 'linear-gradient(90deg,#6366f1,#a855f7)', boxShadow: '0 0 14px rgba(99,102,241,0.6)' }}>
+            <div className="absolute inset-0 rounded-full opacity-50"
+              style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.25) 50%, transparent 100%)', animation: 'shimmer 2s infinite' }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className={`rounded-2xl border overflow-hidden transition-all duration-300 ${card}`}
+        style={{ boxShadow: d ? '0 4px 24px rgba(0,0,0,0.35)' : '0 2px 12px rgba(0,0,0,0.06)' }}>
+
+        {/* Desktop thead */}
+        <div className={`hidden sm:grid grid-cols-12 px-6 py-3 border-b ${div} ${thBg}`}>
+          {[['Date', 'col-span-3'], ['Day', 'col-span-1'], ['Check In', 'col-span-2'], ['Check Out', 'col-span-2'], ['Hours', 'col-span-2'], ['Status', 'col-span-2']].map(([h, c]) => (
+            <div key={h} className={`${c} text-[9px] font-bold tracking-[0.25em] ${ts} uppercase`}>{h}</div>
+          ))}
+        </div>
+
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-24 gap-3">
+            <div className="w-6 h-6 rounded-full border-2 border-indigo-500/30 border-t-indigo-500 animate-spin" />
+            <span className={`text-sm ${ts}`}>Fetching records…</span>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className={`flex flex-col items-center justify-center py-24 gap-3 ${ts}`}>
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${d ? 'bg-white/[0.03] border border-white/[0.07]' : 'bg-slate-50 border border-slate-100'}`}>
+              <svg className="w-7 h-7 opacity-25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+            </div>
+            <p className="text-sm font-medium">No records for this period</p>
+          </div>
         ) : (
           <>
-            {/* DESKTOP */}
-            <div className="hidden sm:block overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-slate-800">
-                    {['Date', 'Day', 'Check In', 'Check Out', 'Hours', 'Status'].map((h) => (
-                      <th key={h} className="px-5 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {filteredRecords.map((rec, idx) => {
-                    const s         = statusStyle(rec.status);
-                    const isWeekend = rec.status === 'off';
-
-                    return (
-                      <tr
-                        key={rec._id || `${rec.date}-${idx}`}
-                        className={`border-b border-slate-800/60 transition-colors ${
-                          isWeekend ? 'opacity-50' : 'hover:bg-slate-800/30'
-                        }`}
-                      >
-                        <td className="px-5 py-4 text-white text-sm">
-                          {formatDate(rec.date, { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </td>
-
-                        <td className="px-5 py-4 text-slate-400 text-sm">
-                          {formatDate(rec.date, { weekday: 'short' })}
-                        </td>
-
-                        <td className="px-5 py-4 text-sm text-slate-300 font-mono">
-                          {formatPKTimeOnly(rec.checkIn)}
-                        </td>
-
-                        <td className="px-5 py-4 text-sm text-slate-300 font-mono">
-                          {formatPKTimeOnly(rec.checkOut)}
-                        </td>
-
-                        <td className="px-5 py-4 text-sm text-slate-300 font-mono">
-                          {calculateHours(rec.checkIn, rec.checkOut)}
-                        </td>
-
-                        <td className="px-5 py-4">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full font-medium ${s.badge}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-                            {statusLabel(rec.status)}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* MOBILE */}
-            <div className="sm:hidden divide-y divide-slate-800">
-              {filteredRecords.map((rec, idx) => {
-                const s         = statusStyle(rec.status);
-                const isWeekend = rec.status === 'off';
-
+            {/* Desktop rows */}
+            <div className="hidden sm:block">
+              {filtered.map((rec, idx) => {
+                const badge = STATUS_BADGE[rec.status] ?? STATUS_BADGE.off;
+                const dot   = STATUS_DOT[rec.status]   ?? STATUS_DOT.off;
+                const glow  = STATUS_GLOW[rec.status]  ?? STATUS_GLOW.off;
+                const isOff = rec.status === 'off';
                 return (
-                  <div
-                    key={rec._id || `${rec.date}-${idx}`}
-                    className={`p-4 ${isWeekend ? 'opacity-50' : ''}`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-white text-sm font-medium">
-                        {formatDate(rec.date, { weekday: 'short', day: '2-digit', month: 'short' })}
-                      </p>
-
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full font-medium ${s.badge}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-                        {statusLabel(rec.status)}
+                  <div key={rec._id || idx}
+                    className={`grid grid-cols-12 items-center px-6 py-3.5 transition-all ${idx < filtered.length - 1 ? `border-b ${div}` : ''} ${isOff ? 'opacity-35' : hover}`}>
+                    <div className={`col-span-3 text-sm font-semibold ${tp}`}>{fmtDate(rec.date, { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                    <div className={`col-span-1 text-[10px] font-bold ${ts}`}>{fmtDate(rec.date, { weekday: 'short' })}</div>
+                    <div className={`col-span-2 text-[12px] font-mono ${d ? 'text-slate-300' : 'text-slate-600'}`}>{fmtPK(rec.checkIn)}</div>
+                    <div className={`col-span-2 text-[12px] font-mono ${d ? 'text-slate-300' : 'text-slate-600'}`}>{fmtPK(rec.checkOut)}</div>
+                    <div className={`col-span-2 text-[12px] font-mono ${d ? 'text-slate-500' : 'text-slate-500'}`}>{calcHrs(rec.checkIn, rec.checkOut)}</div>
+                    <div className="col-span-2">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold border ${badge}`}>
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: dot, boxShadow: `0 0 6px ${glow}` }} />
+                        {rec.status === 'half-day' ? 'Half Day' : rec.status.charAt(0).toUpperCase() + rec.status.slice(1)}
                       </span>
                     </div>
+                  </div>
+                );
+              })}
+            </div>
 
-                    {!isWeekend && (
-                      <div className="flex flex-wrap gap-3 mt-1">
-                        <p className="text-slate-400 text-xs">
-                          In: <span className="text-slate-300 font-mono">{formatPKTimeOnly(rec.checkIn)}</span>
-                        </p>
-                        <p className="text-slate-400 text-xs">
-                          Out: <span className="text-slate-300 font-mono">{formatPKTimeOnly(rec.checkOut)}</span>
-                        </p>
-                        <p className="text-slate-400 text-xs">
-                          Hours: <span className="text-slate-300 font-mono">{calculateHours(rec.checkIn, rec.checkOut)}</span>
-                        </p>
+            {/* Mobile cards */}
+            <div className="sm:hidden divide-y" style={{ borderColor: d ? 'rgba(255,255,255,0.06)' : '#f1f5f9' }}>
+              {filtered.map((rec, idx) => {
+                const badge = STATUS_BADGE[rec.status] ?? STATUS_BADGE.off;
+                const dot   = STATUS_DOT[rec.status]   ?? STATUS_DOT.off;
+                const glow  = STATUS_GLOW[rec.status]  ?? STATUS_GLOW.off;
+                return (
+                  <div key={rec._id || idx} className={`p-4 ${rec.status === 'off' ? 'opacity-35' : ''}`}>
+                    <div className="flex items-center justify-between">
+                      <p className={`text-sm font-bold ${tp}`}>{fmtDate(rec.date, { weekday: 'short', day: '2-digit', month: 'short' })}</p>
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold border ${badge}`}>
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: dot, boxShadow: `0 0 5px ${glow}` }} />
+                        {rec.status === 'half-day' ? 'Half Day' : rec.status.charAt(0).toUpperCase() + rec.status.slice(1)}
+                      </span>
+                    </div>
+                    {rec.status !== 'off' && (
+                      <div className="flex gap-4 mt-1.5">
+                        <span className={`text-[11px] ${ts}`}>In: <span className={`font-mono ${d ? 'text-slate-300' : 'text-slate-600'}`}>{fmtPK(rec.checkIn)}</span></span>
+                        <span className={`text-[11px] ${ts}`}>Out: <span className={`font-mono ${d ? 'text-slate-300' : 'text-slate-600'}`}>{fmtPK(rec.checkOut)}</span></span>
+                        <span className={`text-[11px] ${ts}`}>Hrs: <span className={`font-mono ${d ? 'text-slate-300' : 'text-slate-600'}`}>{calcHrs(rec.checkIn, rec.checkOut)}</span></span>
                       </div>
                     )}
                   </div>
@@ -270,31 +229,31 @@ export default function AttendancePage() {
         )}
       </div>
 
-      {/* PAGINATION */}
+      {/* Pagination */}
       {pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between pt-2">
-          <p className="text-slate-500 text-xs">
-            Page {pagination.page} of {pagination.totalPages}
+        <div className="flex items-center justify-between">
+          <p className={`text-[11px] font-mono ${ts}`}>
+            Page <span className={tp}>{pagination.page}</span> of <span className={tp}>{pagination.totalPages}</span>
+            <span className={`ml-2 ${tt}`}>({pagination.total} records)</span>
           </p>
-
           <div className="flex gap-2">
-            <button
-              onClick={() => fetchRecords(pagination.page - 1)}
-              disabled={pagination.page <= 1}
-              className="px-3 py-1.5 text-xs rounded-lg bg-slate-800 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-700 transition-colors"
-            >
-              Previous
-            </button>
-            <button
-              onClick={() => fetchRecords(pagination.page + 1)}
-              disabled={pagination.page >= pagination.totalPages}
-              className="px-3 py-1.5 text-xs rounded-lg bg-slate-800 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-700 transition-colors"
-            >
-              Next
-            </button>
+            {[
+              { label: '← Prev', fn: () => fetchRecords(pagination.page - 1), dis: pagination.page <= 1 },
+              { label: 'Next →', fn: () => fetchRecords(pagination.page + 1), dis: pagination.page >= pagination.totalPages },
+            ].map(b => (
+              <button key={b.label} onClick={b.fn} disabled={b.dis}
+                className={`px-4 py-2 text-[11px] font-semibold rounded-xl border transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105 active:scale-95
+                  ${d ? 'border-white/[0.08] bg-[#0c0d14]/80 text-slate-300 hover:bg-white/[0.06]' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 shadow-sm'}`}>
+                {b.label}
+              </button>
+            ))}
           </div>
         </div>
       )}
+
+      <style jsx>{`
+        @keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(400%)} }
+      `}</style>
     </div>
   );
 }

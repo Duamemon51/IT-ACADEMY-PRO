@@ -67,10 +67,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [admin, setAdmin] = useState<Admin | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     const stored = localStorage.getItem('admin');
     if (!stored) {
       router.push('/admin/signin');
@@ -120,11 +118,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen bg-[#0a0a0f] flex overflow-hidden">
       <style>{`
         @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
-        @keyframes slideInLeft { from { transform: translateX(-100%) } to { transform: translateX(0) } }
         @keyframes slideInRight { from { transform: translateX(100%); opacity: 0 } to { transform: translateX(0); opacity: 1 } }
         .sidebar-item { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
         .sidebar-item:hover { transform: translateX(2px); }
-        .active-indicator { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .nav-icon-wrap { transition: all 0.2s ease; }
         .sidebar-item:hover .nav-icon-wrap { transform: scale(1.08); }
         .glass { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
@@ -134,7 +130,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .page-enter { animation: slideInRight 0.3s ease both; }
       `}</style>
 
-      {/* Mobile overlay */}
+      {/* Mobile overlay — sits BELOW modal (z-20 < z-9999) */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/60 glass z-20 lg:hidden animate-[fadeIn_0.2s_ease]"
@@ -142,7 +138,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar — z-30, below modal */}
       <aside
         className={`fixed top-0 left-0 h-screen w-64 z-30 flex flex-col flex-shrink-0 transition-transform duration-300 ease-out
           lg:sticky lg:translate-x-0
@@ -180,7 +176,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 href={item.href}
                 onClick={() => setSidebarOpen(false)}
                 className={`sidebar-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium relative group ${isActive ? item.activeBg : 'hover:bg-white/4'}`}
-                style={isActive ? {} : {}}
               >
                 {isActive && (
                   <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 rounded-full bg-gradient-to-b ${item.gradient}`} />
@@ -228,8 +223,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
 
-        {/* Topbar */}
-        <header className="glass sticky top-0 z-10 flex-shrink-0 flex items-center gap-4 px-4 lg:px-6 py-3.5" style={{ background: 'rgba(10,10,15,0.85)', borderBottom: '1px solid rgba(99,102,241,0.07)' }}>
+        {/* Topbar — z-40 so it stays above sidebar overlay, but BELOW modal (z-9999) */}
+        <header
+          className="glass sticky top-0 flex-shrink-0 flex items-center gap-4 px-4 lg:px-6 py-3.5"
+          style={{
+            background: 'rgba(10,10,15,0.85)',
+            borderBottom: '1px solid rgba(99,102,241,0.07)',
+            zIndex: 40,
+          }}
+        >
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-all"

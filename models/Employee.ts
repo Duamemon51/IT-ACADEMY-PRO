@@ -5,18 +5,42 @@ export interface IEmployeeDocument extends Document {
   employeeId: string;
   name: string;
   cnic: string;
+  cnicFrontImage?: string;
+  cnicBackImage?: string;
+
   email: string;
+  companyEmail?: string;
+
   phone?: string;
+  alternatePhone?: string;
+
   department?: string;
   designation?: string;
+
   password: string;
-  plainPassword: string; // ✅ ADDED
+  plainPassword: string;
+
   qrCode: string;
   qrToken: string;
+
+  // 🏦 Bank Details
+  bankAccountNo?: string;
+  bankAccountTitle?: string;
+
+  // 📅 Employment
+  joiningDate?: Date;
+
+  // 💰 Salary
+  basicPay?: number;
+  adjustment?: number;
+  deduction?: number;
+
   isActive: boolean;
   createdBy: mongoose.Types.ObjectId;
+
   createdAt: Date;
   updatedAt: Date;
+
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
@@ -36,7 +60,6 @@ const EmployeeSchema = new Schema<IEmployeeDocument>(
       trim: true,
     },
 
-    // 🔥 IMPORTANT FIX (prevents duplicate null issue)
     cnic: {
       type: String,
       required: [true, 'CNIC is required'],
@@ -45,6 +68,10 @@ const EmployeeSchema = new Schema<IEmployeeDocument>(
       index: true,
       sparse: true,
     },
+
+    // 🪪 CNIC Images
+    cnicFrontImage: { type: String, trim: true },
+    cnicBackImage: { type: String, trim: true },
 
     email: {
       type: String,
@@ -56,15 +83,38 @@ const EmployeeSchema = new Schema<IEmployeeDocument>(
       sparse: true,
     },
 
+    // 🏢 Company Email
+    companyEmail: {
+      type: String,
+      lowercase: true,
+      trim: true,
+    },
+
     phone: { type: String, trim: true },
+
+    // 📞 Alternate Number
+    alternatePhone: { type: String, trim: true },
+
     department: { type: String, trim: true },
     designation: { type: String, trim: true },
 
     password: { type: String, required: true },
-    plainPassword: { type: String, required: true }, // ✅ ADDED
+    plainPassword: { type: String, required: true },
 
     qrCode: { type: String, required: true },
     qrToken: { type: String, required: true, unique: true, index: true },
+
+    // 🏦 Bank Details
+    bankAccountNo: { type: String, trim: true },
+    bankAccountTitle: { type: String, trim: true },
+
+    // 📅 Joining Date
+    joiningDate: { type: Date },
+
+    // 💰 Salary Structure
+    basicPay: { type: Number, default: 0 },
+    adjustment: { type: Number, default: 0 },
+    deduction: { type: Number, default: 0 },
 
     isActive: { type: Boolean, default: true },
 
@@ -97,9 +147,10 @@ EmployeeSchema.methods.comparePassword = async function (
 };
 
 //
-// ⚡ FIX: Prevent model overwrite (Next.js hot reload issue)
+// ⚡ MODEL FIX
 //
 const Employee: Model<IEmployeeDocument> =
-  mongoose.models.Employee || mongoose.model<IEmployeeDocument>('Employee', EmployeeSchema);
+  mongoose.models.Employee ||
+  mongoose.model<IEmployeeDocument>('Employee', EmployeeSchema);
 
 export default Employee;
