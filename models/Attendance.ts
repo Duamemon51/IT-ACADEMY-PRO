@@ -3,15 +3,12 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export interface IAttendanceDocument extends Document {
   employeeId: mongoose.Types.ObjectId;
-
   checkIn?: Date;
   checkOut?: Date;
-
   date: string;
-
   status: 'present' | 'late' | 'half-day' | 'absent' | 'off';
 
-  // 📍 Location (GPS)
+  // 📍 Location
   latitude?: number;
   longitude?: number;
   location?: string;
@@ -20,8 +17,13 @@ export interface IAttendanceDocument extends Document {
   ipAddress?: string;
   deviceInfo?: string;
 
-  // 🔐 QR Tracking (❌ expiry removed)
+  // 🔐 QR Tracking
   qrTokenUsed: string;
+
+  // 📸 Selfie Attendance
+  selfieImage?: string;          // URL (Cloudinary/S3) ya base64
+  selfieUploadedAt?: Date;
+  attendanceMethod: 'qr' | 'selfie' | 'manual';
 
   // ⏱️ Work Tracking
   workingHours?: number;
@@ -42,15 +44,9 @@ const AttendanceSchema = new Schema<IAttendanceDocument>(
       ref: 'Employee',
       required: true,
     },
-
     checkIn: Date,
     checkOut: Date,
-
-    date: {
-      type: String,
-      required: true, // YYYY-MM-DD
-    },
-
+    date: { type: String, required: true },
     status: {
       type: String,
       enum: ['present', 'absent', 'late', 'half-day', 'off'],
@@ -66,32 +62,29 @@ const AttendanceSchema = new Schema<IAttendanceDocument>(
     ipAddress: String,
     deviceInfo: String,
 
-    // 🔐 QR (expiry removed)
-    qrTokenUsed: {
+    // 🔐 QR
+    qrTokenUsed: { type: String, required: true },
+
+    // 📸 Selfie
+    selfieImage: { type: String },
+    selfieUploadedAt: { type: Date },
+    attendanceMethod: {
       type: String,
-      required: true,
+      enum: ['qr', 'selfie', 'manual'],
+      default: 'qr',
     },
 
     // ⏱️ Work
     workingHours: Number,
-    isLate: {
-      type: Boolean,
-      default: false,
-    },
-    isEarlyLeave: {
-      type: Boolean,
-      default: false,
-    },
+    isLate: { type: Boolean, default: false },
+    isEarlyLeave: { type: Boolean, default: false },
 
     // 📍 Validation
     isWithinOffice: Boolean,
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-// ✅ One record per employee per day
 AttendanceSchema.index({ employeeId: 1, date: 1 }, { unique: true });
 
 const Attendance: Model<IAttendanceDocument> =

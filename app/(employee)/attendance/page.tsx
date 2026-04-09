@@ -234,7 +234,7 @@ export default function AttendancePage() {
         <div className="flex items-center justify-between">
           <p className={`text-[11px] font-mono ${ts}`}>
             Page <span className={tp}>{pagination.page}</span> of <span className={tp}>{pagination.totalPages}</span>
-            <span className={`ml-2 ${tt}`}>({pagination.total} records)</span>
+          
           </p>
           <div className="flex gap-2">
             {[

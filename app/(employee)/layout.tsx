@@ -20,11 +20,11 @@ const NAV_ITEMS = [
     icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M3 3h5v5H3zM16 3h5v5h-5zM3 16h5v5H3z" /><path d="M16 16h2v2h-2zM20 16h1v1h-1zM16 20h1v1h-1zM19 19h2v2h-2z" /><path d="M8 8h1v1H8zM15 8h1v1h-1zM8 15h1v1H8z" /></svg>),
   },
   {
-    href: '/attendance', label: 'Registry', color: '#f472b6',
+    href: '/attendance', label: 'Attendance', color: '#f472b6',
     icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="1" /><path d="M9 12h6M9 16h4" /></svg>),
   },
   {
-    href: '/tickets', label: 'Relay', color: '#fb923c',
+    href: '/tickets', label: 'Support', color: '#fb923c',
     icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" /></svg>),
   },
 ];
