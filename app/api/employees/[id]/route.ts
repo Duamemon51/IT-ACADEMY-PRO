@@ -23,7 +23,7 @@ async function saveImage(base64: string, fileName: string) {
 }
 
 //
-// ✅ GET SINGLE EMPLOYEE (FIXED)
+// ✅ GET SINGLE EMPLOYEE
 //
 export async function GET(
   req: NextRequest,
@@ -40,9 +40,9 @@ export async function GET(
 
     await connectDB();
 
-    // ✅ IMPORTANT FIX
     const { id } = await params;
 
+    // Exclude only the hashed password; keep plainPassword for admin view
     const employee = await Employee.findById(id)
       .select('-password')
       .populate('createdBy', 'name email');
@@ -68,7 +68,7 @@ export async function GET(
 }
 
 //
-// ✅ UPDATE EMPLOYEE (ALREADY CORRECT - CLEANED)
+// ✅ UPDATE EMPLOYEE (with password support)
 //
 export async function PUT(
   req: NextRequest,
@@ -88,7 +88,8 @@ export async function PUT(
     const { id } = await params;
     const body = await req.json();
 
-    const employee = await Employee.findById(id);
+    // Fetch with password field so we can update it
+    const employee = await Employee.findById(id).select('+password');
 
     if (!employee) {
       return NextResponse.json(
@@ -115,9 +116,11 @@ export async function PUT(
       deduction,
       cnicFrontImage,
       cnicBackImage,
+      // 🔑 New password fields
+      newPassword,
     } = body;
 
-    // CNIC
+    // ── CNIC ─────────────────────────────────────────────────────────────────
     if (cnic && cnic !== employee.cnic) {
       if (!validateCNIC(cnic)) {
         return NextResponse.json(
@@ -143,7 +146,7 @@ export async function PUT(
       employee.cnic = formattedCNIC;
     }
 
-    // EMAIL
+    // ── EMAIL ────────────────────────────────────────────────────────────────
     if (email && email !== employee.email) {
       const lowerEmail = email.toLowerCase();
 
@@ -162,7 +165,14 @@ export async function PUT(
       employee.email = lowerEmail;
     }
 
-    // TEXT
+    // ── PASSWORD ─────────────────────────────────────────────────────────────
+    // Admin sets a new plain-text password; pre-save hook will hash it
+    if (newPassword && newPassword.trim().length >= 6) {
+      employee.password = newPassword.trim();      // will be hashed by pre-save
+      employee.plainPassword = newPassword.trim(); // store raw for admin reference
+    }
+
+    // ── TEXT FIELDS ──────────────────────────────────────────────────────────
     if (name) employee.name = name.trim();
     if (phone !== undefined) employee.phone = phone?.trim();
     if (alternatePhone !== undefined) employee.alternatePhone = alternatePhone?.trim();
@@ -172,28 +182,22 @@ export async function PUT(
       employee.companyEmail = companyEmail?.toLowerCase()?.trim();
     }
 
-    // BANK
-    if (bankAccountNo !== undefined) {
-      employee.bankAccountNo = bankAccountNo?.trim();
-    }
-    if (bankAccountTitle !== undefined) {
-      employee.bankAccountTitle = bankAccountTitle?.trim();
-    }
+    // ── BANK ─────────────────────────────────────────────────────────────────
+    if (bankAccountNo !== undefined) employee.bankAccountNo = bankAccountNo?.trim();
+    if (bankAccountTitle !== undefined) employee.bankAccountTitle = bankAccountTitle?.trim();
 
-    // DATE
-    if (joiningDate) {
-      employee.joiningDate = new Date(joiningDate);
-    }
+    // ── DATE ─────────────────────────────────────────────────────────────────
+    if (joiningDate) employee.joiningDate = new Date(joiningDate);
 
-    // SALARY
+    // ── SALARY ───────────────────────────────────────────────────────────────
     if (basicPay !== undefined) employee.basicPay = basicPay;
     if (adjustment !== undefined) employee.adjustment = adjustment;
     if (deduction !== undefined) employee.deduction = deduction;
 
-    // STATUS
+    // ── STATUS ───────────────────────────────────────────────────────────────
     if (isActive !== undefined) employee.isActive = isActive;
 
-    // IMAGES
+    // ── IMAGES ───────────────────────────────────────────────────────────────
     if (cnicFrontImage) {
       employee.cnicFrontImage = await saveImage(
         cnicFrontImage,
@@ -210,10 +214,14 @@ export async function PUT(
 
     await employee.save();
 
+    // Return without hashed password
+   const updated = employee.toObject();
+delete (updated as any).password;
+
     return NextResponse.json({
       success: true,
       message: 'Employee updated successfully',
-      data: { employee },
+      data: { employee: updated },
     });
   } catch (error) {
     console.error('Update employee error:', error);
@@ -225,7 +233,7 @@ export async function PUT(
 }
 
 //
-// ✅ DELETE EMPLOYEE (ALREADY CORRECT)
+// ✅ DELETE EMPLOYEE
 //
 export async function DELETE(
   req: NextRequest,

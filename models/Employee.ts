@@ -98,6 +98,7 @@ const EmployeeSchema = new Schema<IEmployeeDocument>(
     department: { type: String, trim: true },
     designation: { type: String, trim: true },
 
+    // password is hashed; plainPassword stores raw for admin reference
     password: { type: String, required: true },
     plainPassword: { type: String, required: true },
 
@@ -124,15 +125,17 @@ const EmployeeSchema = new Schema<IEmployeeDocument>(
       required: true,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    // Never auto-exclude fields at schema level — let API routes control projection
+  }
 );
 
 //
-// 🔐 HASH PASSWORD
+// 🔐 HASH PASSWORD on save (only when modified)
 //
 EmployeeSchema.pre('save', async function (this: IEmployeeDocument) {
   if (!this.isModified('password')) return;
-
   const salt = await bcrypt.genSalt(12);
   this.password = await bcrypt.hash(this.password, salt);
 });
@@ -147,7 +150,7 @@ EmployeeSchema.methods.comparePassword = async function (
 };
 
 //
-// ⚡ MODEL FIX
+// ⚡ MODEL FIX (Next.js hot-reload safe)
 //
 const Employee: Model<IEmployeeDocument> =
   mongoose.models.Employee ||

@@ -72,7 +72,6 @@ export default function AttendancePage() {
   const workDays = counts.present + counts.late + counts.half;
   const rate = workDays + counts.absent > 0 ? Math.round((workDays / (workDays + counts.absent)) * 100) : 0;
 
-  // Theme tokens
   const card  = d ? 'bg-[#0c0d14]/80 border-white/[0.08]' : 'bg-white/90 border-slate-200/80';
   const tp    = d ? 'text-white'     : 'text-slate-900';
   const ts    = d ? 'text-slate-500' : 'text-slate-500';
@@ -115,10 +114,8 @@ export default function AttendancePage() {
         {statTiles.map(s => (
           <div key={s.label} className={`relative rounded-2xl border p-4 text-center overflow-hidden transition-all duration-300 hover:scale-[1.02] cursor-default ${card}`}
             style={{ boxShadow: d ? '0 4px 20px rgba(0,0,0,0.3)' : '0 2px 10px rgba(0,0,0,0.06)' }}>
-            {/* Top dot accent */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 h-[3px] w-12 rounded-b-full"
               style={{ background: s.color, boxShadow: `0 0 12px ${s.glow}` }} />
-            {/* Background glow blob */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-16 rounded-full opacity-[0.08] blur-xl"
               style={{ background: s.color }} />
             <p className={`text-3xl font-black relative z-10 ${tp}`} style={{ textShadow: d ? `0 0 30px ${s.glow}` : 'none' }}>{s.value}</p>
@@ -155,7 +152,7 @@ export default function AttendancePage() {
         {/* Desktop thead */}
         <div className={`hidden sm:grid grid-cols-12 px-6 py-3 border-b ${div} ${thBg}`}>
           {[['Date', 'col-span-3'], ['Day', 'col-span-1'], ['Check In', 'col-span-2'], ['Check Out', 'col-span-2'], ['Hours', 'col-span-2'], ['Status', 'col-span-2']].map(([h, c]) => (
-            <div key={h} className={`${c} text-[9px] font-bold tracking-[0.25em] ${ts} uppercase`}>{h}</div>
+            <div key={h} className={`${c} text-[11px] font-bold tracking-[0.15em] ${ts} uppercase`}>{h}</div>
           ))}
         </div>
 
@@ -184,10 +181,10 @@ export default function AttendancePage() {
                   <div key={rec._id || idx}
                     className={`grid grid-cols-12 items-center px-6 py-3.5 transition-all ${idx < filtered.length - 1 ? `border-b ${div}` : ''} ${isOff ? 'opacity-35' : hover}`}>
                     <div className={`col-span-3 text-sm font-semibold ${tp}`}>{fmtDate(rec.date, { day: '2-digit', month: 'short', year: 'numeric' })}</div>
-                    <div className={`col-span-1 text-[10px] font-bold ${ts}`}>{fmtDate(rec.date, { weekday: 'short' })}</div>
-                    <div className={`col-span-2 text-[12px] font-mono ${d ? 'text-slate-300' : 'text-slate-600'}`}>{fmtPK(rec.checkIn)}</div>
-                    <div className={`col-span-2 text-[12px] font-mono ${d ? 'text-slate-300' : 'text-slate-600'}`}>{fmtPK(rec.checkOut)}</div>
-                    <div className={`col-span-2 text-[12px] font-mono ${d ? 'text-slate-500' : 'text-slate-500'}`}>{calcHrs(rec.checkIn, rec.checkOut)}</div>
+                    <div className={`col-span-1 text-[13px] font-bold ${ts}`}>{fmtDate(rec.date, { weekday: 'short' })}</div>
+                    <div className={`col-span-2 text-[13px] font-mono font-semibold ${d ? 'text-slate-300' : 'text-slate-600'}`}>{fmtPK(rec.checkIn)}</div>
+                    <div className={`col-span-2 text-[13px] font-mono font-semibold ${d ? 'text-slate-300' : 'text-slate-600'}`}>{fmtPK(rec.checkOut)}</div>
+                    <div className={`col-span-2 text-[13px] font-mono font-semibold ${d ? 'text-slate-400' : 'text-slate-500'}`}>{calcHrs(rec.checkIn, rec.checkOut)}</div>
                     <div className="col-span-2">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold border ${badge}`}>
                         <span className="w-1.5 h-1.5 rounded-full" style={{ background: dot, boxShadow: `0 0 6px ${glow}` }} />
@@ -216,9 +213,9 @@ export default function AttendancePage() {
                     </div>
                     {rec.status !== 'off' && (
                       <div className="flex gap-4 mt-1.5">
-                        <span className={`text-[11px] ${ts}`}>In: <span className={`font-mono ${d ? 'text-slate-300' : 'text-slate-600'}`}>{fmtPK(rec.checkIn)}</span></span>
-                        <span className={`text-[11px] ${ts}`}>Out: <span className={`font-mono ${d ? 'text-slate-300' : 'text-slate-600'}`}>{fmtPK(rec.checkOut)}</span></span>
-                        <span className={`text-[11px] ${ts}`}>Hrs: <span className={`font-mono ${d ? 'text-slate-300' : 'text-slate-600'}`}>{calcHrs(rec.checkIn, rec.checkOut)}</span></span>
+                        <span className={`text-[11px] ${ts}`}>In: <span className={`font-mono font-semibold ${d ? 'text-slate-300' : 'text-slate-600'}`}>{fmtPK(rec.checkIn)}</span></span>
+                        <span className={`text-[11px] ${ts}`}>Out: <span className={`font-mono font-semibold ${d ? 'text-slate-300' : 'text-slate-600'}`}>{fmtPK(rec.checkOut)}</span></span>
+                        <span className={`text-[11px] ${ts}`}>Hrs: <span className={`font-mono font-semibold ${d ? 'text-slate-300' : 'text-slate-600'}`}>{calcHrs(rec.checkIn, rec.checkOut)}</span></span>
                       </div>
                     )}
                   </div>
@@ -234,7 +231,6 @@ export default function AttendancePage() {
         <div className="flex items-center justify-between">
           <p className={`text-[11px] font-mono ${ts}`}>
             Page <span className={tp}>{pagination.page}</span> of <span className={tp}>{pagination.totalPages}</span>
-          
           </p>
           <div className="flex gap-2">
             {[

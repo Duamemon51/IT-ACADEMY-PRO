@@ -18,7 +18,11 @@ const BLANK: TicketForm = {
   lateDate: '', actualArrivalTime: '', lateReason: '',
   overtimeDate: '', overtimeFrom: '', overtimeTo: '', overtimeReason: '', overtimeProject: '',
 };
-interface RecentTicket { id: string; type: string; label: string; date: string; status: 'approved' | 'pending' | 'rejected'; }
+interface RecentTicket {
+  id: string;       // always _id (mongo)
+  ticketId: string; // TKT-XXXXXX display id
+  type: string; label: string; date: string; status: 'approved' | 'pending' | 'rejected';
+}
 
 const TICKET_TYPES = [
   {
@@ -114,9 +118,9 @@ function TicketModal({ open, onClose, initialType, onSubmitted }: {
   const { isDark: d } = useTheme();
   const [form, setForm]     = useState<TicketForm>({ ...BLANK, type: initialType });
   const [status, setStatus] = useState<FormStatus>('idle');
-  const [tid, setTid]       = useState('');
+  const [createdTicket, setCreatedTicket] = useState<{ _id: string; ticketId: string } | null>(null);
 
-  useEffect(() => { if (open) { setForm({ ...BLANK, type: initialType }); setStatus('idle'); setTid(''); } }, [open, initialType]);
+  useEffect(() => { if (open) { setForm({ ...BLANK, type: initialType }); setStatus('idle'); setCreatedTicket(null); } }, [open, initialType]);
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     if (open) window.addEventListener('keydown', h);
@@ -139,9 +143,18 @@ function TicketModal({ open, onClose, initialType, onSubmitted }: {
       });
       const data = await res.json();
       if (!data.success) throw new Error();
-      setTid(data.data._id);
+
+      const { _id, ticketId } = data.data;
+      setCreatedTicket({ _id, ticketId });
       setStatus('success');
-      onSubmitted({ id: data.data._id, type: form.type!, label: typeMeta?.label ?? '', date: new Date().toISOString().split('T')[0], status: 'pending' });
+      onSubmitted({
+        id: _id,
+        ticketId: ticketId || `#${_id.slice(-8).toUpperCase()}`,
+        type: form.type!,
+        label: typeMeta?.label ?? '',
+        date: new Date().toISOString().split('T')[0],
+        status: 'pending',
+      });
     } catch { alert('Submission failed'); setStatus('idle'); }
   };
 
@@ -158,8 +171,7 @@ function TicketModal({ open, onClose, initialType, onSubmitted }: {
       <div className={`relative w-full max-w-lg border rounded-2xl flex flex-col max-h-[90vh] ${modalBg}`}
         style={{ animation: 'modalIn 0.2s cubic-bezier(0.34,1.56,0.64,1) both', boxShadow: d ? '0 30px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)' : '0 30px 80px rgba(0,0,0,0.2)' }}>
 
-        {/* Top gradient bar */}
-       <div className="h-[2px] w-[95%] mx-auto rounded-t-2xl flex-shrink-0"
+        <div className="h-[2px] w-[95%] mx-auto rounded-t-2xl flex-shrink-0"
           style={{ background: typeMeta ? `linear-gradient(90deg,${typeMeta.accent},${typeMeta.accent}40,transparent)` : 'linear-gradient(90deg,#6366f1,#a855f7,transparent)' }} />
 
         {/* Header */}
@@ -183,15 +195,38 @@ function TicketModal({ open, onClose, initialType, onSubmitted }: {
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
           {status === 'success' ? (
             <div className="flex flex-col items-center py-10 text-center">
-              <div className="w-18 h-18 rounded-full flex items-center justify-center mb-5 border border-emerald-500/25 bg-emerald-500/10"
+              <div className="rounded-full flex items-center justify-center mb-5 border border-emerald-500/25 bg-emerald-500/10"
                 style={{ boxShadow: '0 0 40px rgba(52,211,153,0.2)', width: 72, height: 72 }}>
                 <svg className="w-9 h-9 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               </div>
               <p className={`text-lg font-black mb-1.5 ${tp}`}>Ticket Raised!</p>
-              <p className={`text-sm mb-7 ${ts}`}>Your manager will review within 24 hours.</p>
-              <div className={`flex items-center gap-3 px-5 py-3 rounded-xl border ${d ? 'border-white/[0.08] bg-white/[0.03]' : 'border-slate-100 bg-slate-50'}`}>
-                <span className={`text-[9px] uppercase tracking-widest font-bold ${ts}`}>Ticket ID</span>
-                <span className={`font-mono font-bold text-sm ${tp}`}>{tid}</span>
+              <p className={`text-sm mb-6 ${ts}`}>Your manager will review within 24 hours.</p>
+
+              {/* Ticket ID display */}
+              <div className={`w-full rounded-2xl overflow-hidden border ${d ? 'border-white/[0.08]' : 'border-slate-100'}`}
+                style={{ background: d ? 'rgba(255,255,255,0.02)' : '#f8fafc' }}>
+                <div className="px-4 py-2.5 flex items-center gap-2"
+                  style={{ borderBottom: d ? '1px solid rgba(255,255,255,0.05)' : '1px solid #e2e8f0' }}>
+                  <svg className="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" /></svg>
+                  <span className={`text-[9px] font-bold uppercase tracking-widest ${ts}`}>Your Ticket Reference</span>
+                </div>
+                <div className="px-4 py-4 space-y-3">
+                  {/* Prominent TKT-ID */}
+                  <div className="flex items-center justify-between">
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${ts}`}>Ticket ID</span>
+                    <span className="font-mono font-black text-base px-3 py-1 rounded-lg"
+                      style={{ background: 'rgba(129,140,248,0.12)', color: '#818cf8', border: '1px solid rgba(129,140,248,0.25)' }}>
+                      {createdTicket?.ticketId ?? '—'}
+                    </span>
+                  </div>
+                  {/* Mongo ID — smaller, secondary */}
+                  <div className="flex items-center justify-between">
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${ts}`}>Reference</span>
+                    <span className={`font-mono text-[11px] ${d ? 'text-slate-600' : 'text-slate-400'}`}>
+                      #{createdTicket?._id.slice(-10).toUpperCase() ?? '—'}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           ) : (
@@ -301,9 +336,12 @@ export default function SupportTicketsPage() {
         const res  = await fetch('/api/employee/tickets', { headers: { Authorization: `Bearer ${localStorage.getItem('employee_token')}` } });
         const data = await res.json();
         if (data.success) setTickets(data.data.map((t: any) => ({
-          id: t.ticketId || t._id, type: t.type,
-          label: t.type === 'leave' ? `${t.leaveType || ''} Leave` : t.type === 'late_checkin' ? 'Late Check-in' : 'Overtime',
-          date: t.createdAt?.split('T')[0], status: t.status,
+          id:       t._id,
+          ticketId: t.ticketId || `#${t._id.slice(-8).toUpperCase()}`,
+          type:     t.type,
+          label:    t.type === 'leave' ? `${t.leaveType || ''} Leave` : t.type === 'late_checkin' ? 'Late Check-in' : 'Overtime',
+          date:     t.createdAt?.split('T')[0],
+          status:   t.status,
         })));
       } catch (err) { console.error(err); }
     })();
@@ -341,10 +379,8 @@ export default function SupportTicketsPage() {
           <button key={t.id!} onClick={() => open(t.id)}
             className="group relative flex items-center gap-4 p-5 rounded-2xl border text-left transition-all hover:scale-[1.02] active:scale-[0.98] overflow-hidden"
             style={{ background: t.accentBg, borderColor: t.accentBorder, boxShadow: d ? '0 4px 20px rgba(0,0,0,0.25)' : '0 2px 10px rgba(0,0,0,0.05)' }}>
-            {/* Top accent line */}
             <div className="absolute top-0 left-0 right-0 h-[2px]"
               style={{ background: `linear-gradient(90deg,${t.accent},${t.accent}40,transparent)` }} />
-            {/* BG glow */}
             <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full opacity-[0.1] blur-xl transition-opacity group-hover:opacity-[0.18]"
               style={{ background: t.accent }} />
             <div className="p-2.5 rounded-xl flex-shrink-0 transition-all group-hover:scale-110"
@@ -367,8 +403,7 @@ export default function SupportTicketsPage() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2.5">
-            <span className="w-2 h-2 rounded-full bg-indigo-400"
-              style={{ boxShadow: '0 0 8px #818cf8, 0 0 3px #818cf8' }} />
+            <span className="w-2 h-2 rounded-full bg-indigo-400" style={{ boxShadow: '0 0 8px #818cf8, 0 0 3px #818cf8' }} />
             <h2 className={`text-sm font-bold ${tp}`}>My Tickets</h2>
           </div>
           <span className={`text-[9px] font-mono font-semibold px-2.5 py-1 rounded-full ${d ? 'bg-white/[0.04] border border-white/[0.08] text-slate-500' : 'bg-slate-100 border border-slate-200 text-slate-500'}`}>
@@ -378,6 +413,7 @@ export default function SupportTicketsPage() {
 
         <div className={`rounded-2xl border overflow-hidden transition-all duration-300 ${card}`}
           style={{ boxShadow: d ? '0 4px 24px rgba(0,0,0,0.35)' : '0 2px 12px rgba(0,0,0,0.06)' }}>
+
           {/* Table header */}
           <div className={`hidden sm:grid grid-cols-12 px-6 py-3 border-b ${thBg}`}>
             {[['Ticket ID', 'col-span-3'], ['Type', 'col-span-4'], ['Date', 'col-span-3'], ['Status', 'col-span-2 text-right']].map(([h, c]) => (
@@ -399,8 +435,12 @@ export default function SupportTicketsPage() {
               const st   = STATUS_CFG[tk.status];
               return (
                 <div key={tk.id} className={`grid grid-cols-12 items-center px-6 py-4 transition-all ${hover} ${i < tickets.length - 1 ? `border-b ${div}` : ''}`}>
+                  {/* Ticket ID — show TKT-XXXXXX prominently */}
                   <div className="col-span-3">
-                    <span className={`text-[11px] font-mono ${ts}`}>{tk.id}</span>
+                    <span className="font-mono font-bold text-[12px] px-2 py-0.5 rounded-lg"
+                      style={{ background: 'rgba(129,140,248,0.1)', color: '#818cf8', border: '1px solid rgba(129,140,248,0.2)' }}>
+                      {tk.ticketId}
+                    </span>
                   </div>
                   <div className="col-span-4">
                     <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full border"
