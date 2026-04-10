@@ -60,6 +60,18 @@ const navItems = [
     color: 'text-amber-400',
     activeBg: 'bg-amber-500/10',
   },
+  {
+  href: '/admin/scan',
+  label: 'Scan QR',
+  icon: (
+    <svg className="w-[17px] h-[17px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 3.5a.5.5 0 11-1 0 .5.5 0 011 0zM6 6h.01M3 3h5v5H3V3zm13 0h5v5h-5V3zM3 16h5v5H3v-5z" />
+    </svg>
+  ),
+  gradient: 'from-rose-500 to-pink-500',
+  color: 'text-rose-400',
+  activeBg: 'bg-rose-500/10',
+},
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
