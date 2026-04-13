@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import path from 'path';
 import connectDB from '@/lib/mongodb';
 import Attendance from '@/models/Attendance';
 import Employee from '@/models/Employee';
+import cloudinary from '@/lib/cloudinary';
 
-// ─── PKT helpers ────────────────────────────────────────────────────────────
+// ─── PKT helpers ────────────────────────────────────────────
 const pkNow  = () => new Date(Date.now() + 5 * 3600 * 1000);
 const pkDate = () => pkNow().toISOString().split('T')[0];
 
@@ -16,28 +15,29 @@ function deriveStatus(checkInTime: Date): 'present' | 'late' {
   return hour > 9 || (hour === 9 && min > 15) ? 'late' : 'present';
 }
 
+// ─── ✅ Cloudinary Image Upload ─────────────────────────────
 async function saveImage(imageBase64: string, employeeId: string): Promise<string> {
-  const matches = imageBase64.match(/^data:image\/(\w+);base64,(.+)$/);
-  if (!matches) throw new Error('Invalid image format.');
+  try {
+    const result = await cloudinary.uploader.upload(imageBase64, {
+      folder: 'attendance-selfies',
+      public_id: `${employeeId}-${Date.now()}`,
+    });
 
-  const ext      = matches[1];
-  const buffer   = Buffer.from(matches[2], 'base64');
-  const filename = `${employeeId}-${Date.now()}.${ext}`;
-
-  // ─── public/uploads/selfies use karo (process.cwd() se absolute path) ───
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'selfies');
-  await mkdir(uploadDir, { recursive: true });
-  await writeFile(path.join(uploadDir, filename), buffer);
-
-  return `/uploads/selfies/${filename}`;
+    return result.secure_url;
+  } catch (error) {
+    console.error("Cloudinary Upload Error:", error);
+    throw new Error("Image upload failed");
+  }
 }
 
+// ─── API ───────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   await connectDB();
 
   try {
     const { imageBase64, employeeId } = await req.json();
 
+    // ✅ Validate input
     if (!imageBase64 || !employeeId) {
       return NextResponse.json(
         { error: 'Selfie and employeeId are required.' },
@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
     }
 
     const employee = await Employee.findOne({ employeeId });
+
     if (!employee) {
       return NextResponse.json(
         { error: 'Employee not found.' },
@@ -66,20 +67,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ── 8 PM cutoff ──
     const eightPMUtc = new Date(Date.UTC(
       pk.getUTCFullYear(), pk.getUTCMonth(), pk.getUTCDate(),
       15, 0, 0, 0
     ));
 
-    const ipAddress  = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
-    const deviceInfo = req.headers.get('user-agent') || '';
+    const ipAddress  =
+      req.headers.get('x-forwarded-for') ||
+      req.headers.get('x-real-ip') ||
+      'unknown';
 
-    const existing = await Attendance.findOne({ employeeId: employee._id, date: today });
+    const deviceInfo =
+      req.headers.get('user-agent') || '';
 
-    // ════════════════════════════════════════════
-    //  CHECK-IN — no record for today
-    // ════════════════════════════════════════════
+    const existing = await Attendance.findOne({
+      employeeId: employee._id,
+      date: today
+    });
+
+    // ════════════════════════════════════════
+    // ✅ CHECK-IN
+    // ════════════════════════════════════════
     if (!existing) {
+
       if (now >= eightPMUtc) {
         return NextResponse.json(
           { error: 'Check-in is not allowed after 8:00 PM.' },
@@ -113,14 +124,20 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ════════════════════════════════════════════
-    //  CHECK-OUT — checked in but not checked out
-    // ════════════════════════════════════════════
+    // ════════════════════════════════════════
+    // ✅ CHECK-OUT
+    // ════════════════════════════════════════
     if (!existing.checkOut) {
+
       const selfieUrl   = await saveImage(imageBase64, employeeId);
-      const workedHours = (now.getTime() - new Date(existing.checkIn).getTime()) / 3_600_000;
+
+      const workedHours =
+        (now.getTime() - new Date(existing.checkIn).getTime()) / 3_600_000;
+
       const isEarlyLeave = workedHours < 8;
-      const newStatus   = isEarlyLeave ? 'half-day' : existing.status;
+
+      const newStatus =
+        isEarlyLeave ? 'half-day' : existing.status;
 
       await Attendance.findByIdAndUpdate(existing._id, {
         checkOut:         now,
@@ -140,9 +157,9 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ════════════════════════════════════════════
-    //  ALREADY COMPLETE
-    // ════════════════════════════════════════════
+    // ════════════════════════════════════════
+    // ❌ ALREADY DONE
+    // ════════════════════════════════════════
     return NextResponse.json(
       { error: 'Attendance already completed for today.' },
       { status: 409 }
@@ -150,6 +167,7 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error('Selfie attendance error:', error);
+
     return NextResponse.json(
       { error: error.message || 'Server error. Please try again.' },
       { status: 500 }
