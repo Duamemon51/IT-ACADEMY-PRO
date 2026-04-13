@@ -19,12 +19,16 @@ function deriveStatus(checkInTime: Date): 'present' | 'late' {
 async function saveImage(imageBase64: string, employeeId: string): Promise<string> {
   const matches = imageBase64.match(/^data:image\/(\w+);base64,(.+)$/);
   if (!matches) throw new Error('Invalid image format.');
-  const ext       = matches[1];
-  const buffer    = Buffer.from(matches[2], 'base64');
-  const filename  = `${employeeId}-${Date.now()}.${ext}`;
+
+  const ext      = matches[1];
+  const buffer   = Buffer.from(matches[2], 'base64');
+  const filename = `${employeeId}-${Date.now()}.${ext}`;
+
+  // ─── public/uploads/selfies use karo (process.cwd() se absolute path) ───
   const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'selfies');
   await mkdir(uploadDir, { recursive: true });
   await writeFile(path.join(uploadDir, filename), buffer);
+
   return `/uploads/selfies/${filename}`;
 }
 
@@ -49,9 +53,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const now    = new Date();
-    const pk     = pkNow();
-    const today  = pkDate();
+    const now   = new Date();
+    const pk    = pkNow();
+    const today = pkDate();
 
     // ── Weekend block ──
     const dayOfWeek = pk.getUTCDay();
@@ -113,10 +117,10 @@ export async function POST(req: NextRequest) {
     //  CHECK-OUT — checked in but not checked out
     // ════════════════════════════════════════════
     if (!existing.checkOut) {
-      const selfieUrl    = await saveImage(imageBase64, employeeId);
-      const workedHours  = (now.getTime() - new Date(existing.checkIn).getTime()) / 3_600_000;
+      const selfieUrl   = await saveImage(imageBase64, employeeId);
+      const workedHours = (now.getTime() - new Date(existing.checkIn).getTime()) / 3_600_000;
       const isEarlyLeave = workedHours < 8;
-      const newStatus    = isEarlyLeave ? 'half-day' : existing.status;
+      const newStatus   = isEarlyLeave ? 'half-day' : existing.status;
 
       await Attendance.findByIdAndUpdate(existing._id, {
         checkOut:         now,

@@ -31,7 +31,6 @@ export default function ScanPage() {
   const detectCanvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef       = useRef<MediaStream | null>(null);
   const countRef        = useRef<ReturnType<typeof setInterval> | null>(null);
-  const holdTimerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
   const detectLoopRef   = useRef<number | null>(null);
   const progressRef     = useRef(0);
   const didCaptureRef   = useRef(false);
@@ -45,35 +44,43 @@ export default function ScanPage() {
   }, []);
 
   useEffect(() => {
-    if (mode !== 'camera-live') { stopCamera(); stopDetection(); }
+    if (mode !== 'camera-live') {
+      stopCamera();
+      stopDetection();
+    }
   }, [mode]);
 
   useEffect(() => () => {
-    stopCamera(); stopDetection();
+    stopCamera();
+    stopDetection();
     if (countRef.current) clearInterval(countRef.current);
   }, []);
 
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
   };
 
   const stopDetection = () => {
     if (detectLoopRef.current) cancelAnimationFrame(detectLoopRef.current);
-    if (holdTimerRef.current) clearInterval(holdTimerRef.current);
+    if (countRef.current) clearInterval(countRef.current);
     detectLoopRef.current = null;
-    holdTimerRef.current = null;
     progressRef.current = 0;
     holdFrames.current = 0;
   };
 
   const reset = () => {
+    stopCamera();
+    stopDetection();
+    if (countRef.current) clearInterval(countRef.current);
     setMode('show-qr'); setMessage(''); setCaptured(null);
     setCamError(''); setCountdown(null); setAttendanceAction(null);
     setAlignStatus('waiting'); setHoldProgress(0); setScanLine(0);
     progressRef.current = 0; didCaptureRef.current = false; holdFrames.current = 0;
-    if (countRef.current) clearInterval(countRef.current);
-    stopDetection();
+    scanLineRef.current = 0; scanDirRef.current = 1;
   };
 
   const isFaceInOval = useCallback((): boolean => {
@@ -108,12 +115,27 @@ export default function ScanPage() {
     return (skinPx / totalPx) > 0.26;
   }, []);
 
+  const capturePhoto = useCallback(() => {
+    const video = videoRef.current, canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    const W = video.videoWidth || 640, H = video.videoHeight || 480;
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.translate(W, 0); ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, W, H);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.90);
+    stopCamera();
+    stopDetection();
+    setCaptured(dataUrl);
+    setMode('selfie-preview');
+  }, []);
+
   const startDetectionLoop = useCallback(() => {
     if (didCaptureRef.current) return;
 
     const faceIn = isFaceInOval();
     if (faceIn) {
-      // face found — stop scan line, start hold
       scanLineRef.current = -1;
       setScanLine(-1);
       setAlignStatus('hold');
@@ -128,7 +150,6 @@ export default function ScanPage() {
         return;
       }
     } else {
-      // no face — animate scan line
       scanLineRef.current += scanDirRef.current * 2.2;
       if (scanLineRef.current >= 100 || scanLineRef.current < 0) {
         scanDirRef.current *= -1;
@@ -142,33 +163,63 @@ export default function ScanPage() {
       setAlignStatus(pct > 4 ? 'detecting' : 'waiting');
     }
     detectLoopRef.current = requestAnimationFrame(startDetectionLoop);
-  }, [isFaceInOval]);
+  }, [isFaceInOval, capturePhoto]);
 
   const startCamera = async () => {
-    setCamError(''); setCaptured(null);
-    setAlignStatus('waiting'); setHoldProgress(0);
-    progressRef.current = 0; didCaptureRef.current = false; holdFrames.current = 0;
+    // Reset everything first
+    stopCamera();
+    stopDetection();
+    setCamError('');
+    setCaptured(null);
+    setAlignStatus('waiting');
+    setHoldProgress(0);
+    setCountdown(null);
+    progressRef.current = 0;
+    didCaptureRef.current = false;
+    holdFrames.current = 0;
+    scanLineRef.current = 0;
+    scanDirRef.current = 1;
+
+    // Set mode before requesting camera
     setMode('camera-live');
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+        video: {
+          facingMode: 'user',
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+        },
         audio: false,
       });
+
       streamRef.current = stream;
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(console.error);
-          videoRef.current.onloadeddata = () => {
-            setTimeout(() => {
-              setAlignStatus('detecting');
-              detectLoopRef.current = requestAnimationFrame(startDetectionLoop);
-            }, 700);
-          };
+
+      // Wait for next tick so videoRef is mounted in camera-live mode
+      setTimeout(() => {
+        const video = videoRef.current;
+        if (!video) {
+          setCamError('Unable to start camera. Please try again.');
+          return;
         }
-      });
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          video.play()
+            .then(() => {
+              setTimeout(() => {
+                setAlignStatus('detecting');
+                detectLoopRef.current = requestAnimationFrame(startDetectionLoop);
+              }, 600);
+            })
+            .catch(() => {
+              setCamError('Unable to start camera. Please try again.');
+            });
+        };
+      }, 100);
+
     } catch (err: unknown) {
       const e = err as Error;
+      setMode('camera-live'); // stay on camera view to show error
       if (e.name === 'NotAllowedError')
         setCamError('Camera access denied. Please allow camera permissions in your browser settings.');
       else if (e.name === 'NotFoundError')
@@ -178,27 +229,20 @@ export default function ScanPage() {
     }
   };
 
-  const capturePhoto = useCallback(() => {
-    const video = videoRef.current, canvas = canvasRef.current;
-    if (!video || !canvas) return;
-    const W = video.videoWidth || 640, H = video.videoHeight || 480;
-    canvas.width = W; canvas.height = H;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.translate(W, 0); ctx.scale(-1, 1);
-    ctx.drawImage(video, 0, 0, W, H);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.90);
-    setCaptured(dataUrl); stopCamera(); stopDetection();
-    setMode('selfie-preview');
-  }, []);
-
   const startCountdown = () => {
-    didCaptureRef.current = true; stopDetection();
-    setAlignStatus('waiting'); setHoldProgress(0);
+    if (didCaptureRef.current) return;
+    didCaptureRef.current = true;
+    stopDetection();
+    setAlignStatus('waiting');
+    setHoldProgress(0);
     setCountdown(3);
     countRef.current = setInterval(() => {
       setCountdown(prev => {
-        if (prev === null || prev <= 1) { clearInterval(countRef.current!); capturePhoto(); return null; }
+        if (prev === null || prev <= 1) {
+          clearInterval(countRef.current!);
+          capturePhoto();
+          return null;
+        }
         return prev - 1;
       });
     }, 1000);
@@ -209,7 +253,8 @@ export default function ScanPage() {
     setUploading(true);
     try {
       const res  = await fetch('/api/employee/attendance/selfie', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64: capturedImage, employeeId: employee.employeeId }),
       });
       const data = await res.json();
@@ -220,22 +265,35 @@ export default function ScanPage() {
       } else if (res.status === 409) {
         setMessage(data.error || 'Attendance already completed for today.');
         setMode('already-done');
-      } else { setMessage(data.error || 'Something went wrong.'); setMode('error'); }
-    } catch { setMessage('Unable to reach server. Please try again.'); setMode('error'); }
-    finally { setUploading(false); }
+      } else {
+        setMessage(data.error || 'Something went wrong.');
+        setMode('error');
+      }
+    } catch {
+      setMessage('Unable to reach server. Please try again.');
+      setMode('error');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const downloadQR = async () => {
-    if (!qrRef.current) return; setDown(true);
+    if (!qrRef.current) return;
+    setDown(true);
     try {
       const url = await toPng(qrRef.current, { backgroundColor: '#ffffff', cacheBust: true });
       const link = document.createElement('a');
       link.download = `${employee?.name || 'employee'}-qr.png`;
-      link.href = url; link.click();
-    } catch (err) { console.error(err); } finally { setDown(false); }
+      link.href = url;
+      link.click();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDown(false);
+    }
   };
 
-  const isCheckOut = attendanceAction === 'check-out';
+  const isCheckOut   = attendanceAction === 'check-out';
   const circumference = 2 * Math.PI * 80;
 
   const ovalStroke =
@@ -254,9 +312,9 @@ export default function ScanPage() {
     alignStatus === 'hold' || alignStatus === 'captured' ? '#10b981' :
     alignStatus === 'detecting' ? '#f59e0b' : '#a5b4fc';
 
-  const tp   = d ? 'text-white'    : 'text-gray-900';
-  const ts   = d ? 'text-gray-400' : 'text-gray-500';
-  const card = d
+  const tp      = d ? 'text-white'    : 'text-gray-900';
+  const ts      = d ? 'text-gray-400' : 'text-gray-500';
+  const card    = d
     ? 'bg-[#07091a] border-white/[0.08]'
     : 'bg-white border-gray-200 shadow-[0_8px_40px_rgba(99,102,241,0.10)]';
   const divider = d ? 'border-white/[0.06]' : 'border-gray-100';
@@ -294,10 +352,8 @@ export default function ScanPage() {
               style={{ background: 'linear-gradient(135deg,#6366f1,#a855f7,#ec4899)' }}
             />
             <div className={`relative rounded-[30px] border overflow-hidden ${card}`}>
-              {/* Top accent bar */}
               <div className="h-1 w-full" style={{ background: 'linear-gradient(90deg,#6366f1,#8b5cf6,#a855f7,#ec4899,#f43f5e)' }} />
 
-              {/* Card header */}
               <div className={`flex items-center justify-between px-6 pt-4 pb-4 border-b ${divider}`}>
                 <div>
                   <p className="text-[10px] font-black tracking-[0.5em] uppercase" style={{ color: '#818cf8' }}>Academy Pro</p>
@@ -313,8 +369,6 @@ export default function ScanPage() {
 
               {employee?.qrCode ? (
                 <div className="px-6 py-5 flex flex-col items-center">
-
-                  {/* QR Code */}
                   <div className="relative">
                     <div className="p-[3px] rounded-3xl" style={{ background: 'linear-gradient(135deg,#6366f1,#a855f7,#ec4899)' }}>
                       <div ref={qrRef} className="bg-white p-4 rounded-[22px]">
@@ -338,7 +392,6 @@ export default function ScanPage() {
                     ))}
                   </div>
 
-                  {/* Ready badge */}
                   <div
                     className="flex items-center gap-2 mt-4 px-4 py-1.5 rounded-full"
                     style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)' }}
@@ -347,7 +400,6 @@ export default function ScanPage() {
                     <span className="text-[11px] font-black tracking-[0.3em] text-emerald-400">READY TO SCAN</span>
                   </div>
 
-                  {/* Employee info */}
                   <div className="text-center mt-3 w-full">
                     <h2 className={`text-[22px] font-black ${tp}`}>{employee.name}</h2>
                     <div className="flex items-center justify-center gap-3 mt-2.5">
@@ -363,7 +415,6 @@ export default function ScanPage() {
                     </div>
                   </div>
 
-                  {/* Action buttons */}
                   <div className="grid grid-cols-2 gap-3 w-full mt-4">
                     <button
                       onClick={downloadQR}
@@ -389,7 +440,6 @@ export default function ScanPage() {
                     </button>
                   </div>
 
-                  {/* Divider */}
                   <div className={`w-full mt-4 pt-4 border-t ${divider}`}>
                     <div className="flex items-center gap-3 mb-3">
                       <div className={`flex-1 h-px ${d ? 'bg-white/[0.06]' : 'bg-gray-100'}`} />
@@ -397,7 +447,6 @@ export default function ScanPage() {
                       <div className={`flex-1 h-px ${d ? 'bg-white/[0.06]' : 'bg-gray-100'}`} />
                     </div>
 
-                    {/* Selfie button — full width, prominent */}
                     <button
                       onClick={startCamera}
                       className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-sm font-bold transition-all hover:scale-[1.01] active:scale-95 ${secBtn}`}
@@ -426,7 +475,6 @@ export default function ScanPage() {
                   </p>
                 </div>
               ) : (
-                /* No QR state */
                 <div className="px-6 py-8 flex flex-col items-center gap-4">
                   <div
                     className="w-24 h-24 rounded-3xl flex items-center justify-center"
@@ -470,7 +518,6 @@ export default function ScanPage() {
                 style={{ background: `linear-gradient(90deg,${ovalStroke},#a855f7,#ec4899)` }}
               />
 
-              {/* Camera header */}
               <div className={`flex items-center justify-between px-6 pt-4 pb-3 border-b ${divider}`}>
                 <div className="flex items-center gap-3.5">
                   <div
@@ -577,7 +624,6 @@ export default function ScanPage() {
                               <circle cx="174" cy={12 + (scanLine / 100) * 214} r="3" fill="#f59e0b" fillOpacity="0.7" />
                             </>
                           )}
-                          {/* Corner brackets */}
                           <path d="M24 62 L24 42 L44 42" stroke={ovalStroke} strokeWidth="3.5" strokeLinecap="round" fill="none" style={{ filter: `drop-shadow(0 0 4px ${ovalStroke})` }} />
                           <path d="M166 62 L166 42 L146 42" stroke={ovalStroke} strokeWidth="3.5" strokeLinecap="round" fill="none" style={{ filter: `drop-shadow(0 0 4px ${ovalStroke})` }} />
                           <path d="M24 176 L24 196 L44 196" stroke={ovalStroke} strokeWidth="3.5" strokeLinecap="round" fill="none" style={{ filter: `drop-shadow(0 0 4px ${ovalStroke})` }} />
@@ -955,7 +1001,6 @@ export default function ScanPage() {
             </div>
           </div>
         )}
-
 
         {/* ══════════ ALREADY DONE ══════════ */}
         {mode === 'already-done' && (
