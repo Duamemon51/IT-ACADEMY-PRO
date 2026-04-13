@@ -26,37 +26,79 @@ const TYPE_CFG: Record<TicketType, { label: string; badge: string; iconBg: strin
 };
 
 const STATUS_CFG: Record<TicketStatus, { label: string; cls: string; dot: string }> = {
-  pending:  { label:'Pending',  cls:'bg-amber-500/10 text-amber-400 border border-amber-500/20',     dot:'bg-amber-400 animate-pulse' },
+  pending:  { label:'Pending',  cls:'bg-amber-500/10 text-amber-400 border border-amber-500/20',       dot:'bg-amber-400 animate-pulse' },
   approved: { label:'Approved', cls:'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20', dot:'bg-emerald-400' },
-  rejected: { label:'Rejected', cls:'bg-red-500/10 text-red-400 border border-red-500/20',            dot:'bg-red-400' },
+  rejected: { label:'Rejected', cls:'bg-red-500/10 text-red-400 border border-red-500/20',             dot:'bg-red-400' },
 };
 
 const LeaveIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
 const ClockIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 const ZapIcon   = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>;
+const TrashIcon = () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
 const typeIcon  = (t: TicketType) => t === 'leave' ? <LeaveIcon /> : t === 'late_checkin' ? <ClockIcon /> : <ZapIcon />;
+const Spinner   = () => <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>;
 
 function fmtDate(s?: string) {
   if (!s) return '—';
   return new Date(s + (s.includes('T') ? '' : 'T12:00:00Z')).toLocaleDateString('en-PK', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+// ─── CONFIRM DELETE MODAL ─────────────────────────────────────────────────────
+function ConfirmDeleteModal({ onConfirm, onCancel, loading }: {
+  onConfirm: () => void; onCancel: () => void; loading: boolean;
+}) {
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:10000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div className="absolute inset-0" style={{ background:'rgba(0,0,0,0.85)', backdropFilter:'blur(8px)' }} onClick={onCancel} />
+      <div className="relative w-full max-w-sm rounded-2xl overflow-hidden"
+        style={{ background:'#0d0d1a', border:'1px solid rgba(239,68,68,0.2)', boxShadow:'0 40px 100px rgba(0,0,0,0.7)' }}>
+        <div className="absolute top-0 inset-x-0 h-px" style={{ background:'linear-gradient(90deg,transparent,#ef4444,transparent)' }} />
+        <div className="p-6 text-center space-y-4">
+          <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center" style={{ background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.2)' }}>
+            <TrashIcon />
+          </div>
+          <div>
+            <h3 className="text-white font-bold text-base">Delete Ticket?</h3>
+            <p className="text-slate-500 text-sm mt-1">This action cannot be undone. The ticket will be permanently removed.</p>
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button onClick={onCancel} disabled={loading}
+              className="flex-1 py-2.5 rounded-xl text-slate-400 text-sm font-medium transition-all hover:text-white disabled:opacity-50"
+              style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)' }}>
+              Cancel
+            </button>
+            <button onClick={onConfirm} disabled={loading}
+              className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              style={{ background:'linear-gradient(135deg,#ef4444,#dc2626)', boxShadow:'0 4px 14px rgba(239,68,68,0.25)' }}>
+              {loading ? <Spinner /> : <TrashIcon />}
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── DETAIL MODAL ─────────────────────────────────────────────────────────────
-function DetailModal({ ticket, onClose, onAction, actionLoading }: {
+function DetailModal({ ticket, onClose, onAction, onDelete, actionLoading }: {
   ticket: Ticket; onClose: () => void;
   onAction: (id: string, status: 'approved' | 'rejected') => void;
+  onDelete: (id: string) => void;
   actionLoading: string | null;
 }) {
-  const [mounted, setMounted] = useState(false);
+  const [mounted, setMounted]           = useState(false);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+
   useEffect(() => {
     setMounted(true);
     const sw = window.innerWidth - document.documentElement.clientWidth;
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow     = 'hidden';
     document.body.style.paddingRight = `${sw}px`;
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', h);
     return () => {
-      document.body.style.overflow = '';
+      document.body.style.overflow     = '';
       document.body.style.paddingRight = '';
       window.removeEventListener('keydown', h);
     };
@@ -67,11 +109,12 @@ function DetailModal({ ticket, onClose, onAction, actionLoading }: {
   const typeCfg = TYPE_CFG[ticket.type];
   const stCfg   = STATUS_CFG[ticket.status];
   const emp     = ticket.employeeId;
+  const isLoading = actionLoading === ticket._id;
 
   const Field = ({ label, value, mono = false, full = false }: { label: string; value?: string; mono?: boolean; full?: boolean }) =>
     value ? (
       <div className={`space-y-1 ${full ? 'col-span-2' : ''}`}>
-        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#475569' }}>{label}</p>
+        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color:'#475569' }}>{label}</p>
         <p className={`text-sm text-slate-200 ${mono ? 'font-mono' : ''}`}>{value}</p>
       </div>
     ) : null;
@@ -137,21 +180,23 @@ function DetailModal({ ticket, onClose, onAction, actionLoading }: {
           {/* Submitted at */}
           <div className="flex items-center justify-between px-1">
             <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Submitted</p>
-            <p className="text-xs text-slate-400 font-mono">{fmtDate(ticket.createdAt)} · {new Date(ticket.createdAt).toLocaleTimeString('en-PK', { timeZone:'Asia/Karachi', hour:'2-digit', minute:'2-digit', hour12:true })}</p>
+            <p className="text-xs text-slate-400 font-mono">
+              {fmtDate(ticket.createdAt)} · {new Date(ticket.createdAt).toLocaleTimeString('en-PK', { timeZone:'Asia/Karachi', hour:'2-digit', minute:'2-digit', hour12:true })}
+            </p>
           </div>
 
           {/* Request details */}
           <div className="rounded-2xl overflow-hidden" style={{ border:'1px solid rgba(255,255,255,0.06)' }}>
             <div className="px-4 py-2.5 flex items-center gap-2" style={{ background:'rgba(255,255,255,0.02)', borderBottom:'1px solid rgba(255,255,255,0.05)' }}>
-              <span className={`${typeCfg.color}`} style={{ display:'flex', width:14, height:14 }}>{typeIcon(ticket.type)}</span>
+              <span className={typeCfg.color} style={{ display:'flex', width:14, height:14 }}>{typeIcon(ticket.type)}</span>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Request Details</p>
             </div>
             <div className="p-4 grid grid-cols-2 gap-x-6 gap-y-4">
               {ticket.type === 'leave' && <>
-                <Field label="Leave Type" value={ticket.leaveType ? ticket.leaveType.charAt(0).toUpperCase()+ticket.leaveType.slice(1)+' Leave' : undefined} />
+                <Field label="Leave Type"   value={ticket.leaveType ? ticket.leaveType.charAt(0).toUpperCase()+ticket.leaveType.slice(1)+' Leave' : undefined} />
                 <Field label="Submitted On" value={fmtDate(ticket.createdAt)} />
-                <Field label="From Date" value={fmtDate(ticket.fromDate)} />
-                <Field label="To Date"   value={fmtDate(ticket.toDate)} />
+                <Field label="From Date"    value={fmtDate(ticket.fromDate)} />
+                <Field label="To Date"      value={fmtDate(ticket.toDate)} />
               </>}
               {ticket.type === 'late_checkin' && <>
                 <Field label="Date"           value={fmtDate(ticket.lateDate)} />
@@ -159,11 +204,11 @@ function DetailModal({ ticket, onClose, onAction, actionLoading }: {
                 <Field label="Submitted On"   value={fmtDate(ticket.createdAt)} />
               </>}
               {ticket.type === 'overtime' && <>
-                <Field label="Date"       value={fmtDate(ticket.overtimeDate)} />
-                <Field label="Project"    value={ticket.overtimeProject} />
-                <Field label="From"       value={ticket.overtimeFrom} mono />
-                <Field label="To"         value={ticket.overtimeTo}   mono />
-                <Field label="Submitted"  value={fmtDate(ticket.createdAt)} />
+                <Field label="Date"      value={fmtDate(ticket.overtimeDate)} />
+                <Field label="Project"   value={ticket.overtimeProject} />
+                <Field label="From"      value={ticket.overtimeFrom} mono />
+                <Field label="To"        value={ticket.overtimeTo}   mono />
+                <Field label="Submitted" value={fmtDate(ticket.createdAt)} />
               </>}
             </div>
           </div>
@@ -187,20 +232,24 @@ function DetailModal({ ticket, onClose, onAction, actionLoading }: {
         <div className="px-5 py-4 flex-shrink-0 flex gap-3" style={{ borderTop:'1px solid rgba(255,255,255,0.06)' }}>
           {ticket.status === 'pending' ? (
             <>
-              <button onClick={() => onAction(ticket._id,'rejected')} disabled={actionLoading===ticket._id}
+              {/* Delete — pending tickets */}
+              <button onClick={() => setShowConfirmDelete(true)} disabled={isLoading}
+                className="p-2.5 rounded-xl transition-all disabled:opacity-50 flex items-center justify-center"
+                style={{ background:'rgba(239,68,68,0.06)', border:'1px solid rgba(239,68,68,0.15)', color:'#f87171' }}
+                title="Delete ticket">
+                <TrashIcon />
+              </button>
+
+              <button onClick={() => onAction(ticket._id, 'rejected')} disabled={isLoading}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 style={{ background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', color:'#f87171' }}>
-                {actionLoading===ticket._id
-                  ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                  : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>}
+                {isLoading ? <Spinner /> : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>}
                 Reject
               </button>
-              <button onClick={() => onAction(ticket._id,'approved')} disabled={actionLoading===ticket._id}
+              <button onClick={() => onAction(ticket._id, 'approved')} disabled={isLoading}
                 className="flex-1 py-2.5 rounded-xl text-white text-sm font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 style={{ background:'linear-gradient(135deg,#10b981,#059669)', boxShadow:'0 4px 14px rgba(16,185,129,0.25)' }}>
-                {actionLoading===ticket._id
-                  ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                  : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
+                {isLoading ? <Spinner /> : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
                 Approve
               </button>
             </>
@@ -209,11 +258,32 @@ function DetailModal({ ticket, onClose, onAction, actionLoading }: {
               <div className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-center ${stCfg.cls}`}>
                 {ticket.status === 'approved' ? '✓ Approved' : '✕ Rejected'}
               </div>
-              <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-slate-400 text-sm font-medium transition-all hover:text-white" style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)' }}>Close</button>
+
+              {/* Delete — approved/rejected tickets */}
+              <button onClick={() => setShowConfirmDelete(true)} disabled={isLoading}
+                className="px-4 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                style={{ background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', color:'#f87171' }}>
+                {isLoading ? <Spinner /> : <TrashIcon />}
+                Delete
+              </button>
+
+              <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-slate-400 text-sm font-medium transition-all hover:text-white"
+                style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)' }}>
+                Close
+              </button>
             </div>
           )}
         </div>
       </div>
+
+      {/* Confirm delete dialog */}
+      {showConfirmDelete && (
+        <ConfirmDeleteModal
+          loading={isLoading}
+          onConfirm={() => { setShowConfirmDelete(false); onDelete(ticket._id); }}
+          onCancel={() => setShowConfirmDelete(false)}
+        />
+      )}
     </div>
   );
 
@@ -222,10 +292,10 @@ function DetailModal({ ticket, onClose, onAction, actionLoading }: {
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function AdminTicketsPage() {
-  const [tickets, setTickets]       = useState<Ticket[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [filterStatus, setFilterStatus] = useState<TicketStatus | 'all'>('all');
-  const [filterType, setFilterType]     = useState<TicketType | 'all'>('all');
+  const [tickets, setTickets]               = useState<Ticket[]>([]);
+  const [loading, setLoading]               = useState(true);
+  const [filterStatus, setFilterStatus]     = useState<TicketStatus | 'all'>('all');
+  const [filterType, setFilterType]         = useState<TicketType | 'all'>('all');
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [actionLoading, setActionLoading]   = useState<string | null>(null);
 
@@ -244,11 +314,31 @@ export default function AdminTicketsPage() {
   const handleAction = async (id: string, status: 'approved' | 'rejected') => {
     setActionLoading(id);
     try {
-      const res  = await fetch(`/api/admin/tickets/${id}`, { method:'PATCH', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${localStorage.getItem('admin_token')}` }, body: JSON.stringify({ status }) });
+      const res  = await fetch(`/api/admin/tickets/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type':'application/json', Authorization:`Bearer ${localStorage.getItem('admin_token')}` },
+        body: JSON.stringify({ status }),
+      });
       const data = await res.json();
       if (data.success) {
-        setTickets(prev => prev.map(t => t._id===id ? { ...t, status } : t));
-        setSelectedTicket(prev => prev?._id===id ? { ...prev, status } : prev);
+        setTickets(prev => prev.map(t => t._id === id ? { ...t, status } : t));
+        setSelectedTicket(prev => prev?._id === id ? { ...prev, status } : prev);
+      }
+    } catch (err) { console.error(err); }
+    finally { setActionLoading(null); }
+  };
+
+  const handleDelete = async (id: string) => {
+    setActionLoading(id);
+    try {
+      const res  = await fetch(`/api/admin/tickets/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization:`Bearer ${localStorage.getItem('admin_token')}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTickets(prev => prev.filter(t => t._id !== id));
+        setSelectedTicket(null);
       }
     } catch (err) { console.error(err); }
     finally { setActionLoading(null); }
@@ -262,16 +352,16 @@ export default function AdminTicketsPage() {
 
   const stats = {
     total:    tickets.length,
-    pending:  tickets.filter(t => t.status==='pending').length,
-    approved: tickets.filter(t => t.status==='approved').length,
-    rejected: tickets.filter(t => t.status==='rejected').length,
+    pending:  tickets.filter(t => t.status === 'pending').length,
+    approved: tickets.filter(t => t.status === 'approved').length,
+    rejected: tickets.filter(t => t.status === 'rejected').length,
   };
 
   return (
     <div className="space-y-5">
       <style>{`
         @keyframes slideUp { from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)} }
-        .anim-in { animation:slideUp 0.3s ease both; }
+        .anim-in   { animation:slideUp 0.3s ease both; }
         .ticket-row { transition:all 0.12s ease; cursor:pointer; }
         .ticket-row:hover { background:rgba(255,255,255,0.025); }
         .filter-btn { transition:all 0.16s cubic-bezier(0.4,0,0.2,1); }
@@ -283,7 +373,8 @@ export default function AdminTicketsPage() {
           <h1 className="text-2xl font-bold text-white">Tickets</h1>
           <p className="text-slate-500 text-sm mt-0.5">Review leave, attendance & overtime requests</p>
         </div>
-        <button onClick={fetchTickets} className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-slate-400 hover:text-white text-sm font-medium transition-all group" style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)' }}>
+        <button onClick={fetchTickets} className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-slate-400 hover:text-white text-sm font-medium transition-all group"
+          style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)' }}>
           <svg className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
           Refresh
         </button>
@@ -308,14 +399,16 @@ export default function AdminTicketsPage() {
       <div className="flex flex-wrap gap-2 items-center anim-in" style={{ animationDelay:'0.1s' }}>
         <div className="flex gap-1 p-1 rounded-xl" style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.06)' }}>
           {(['all','pending','approved','rejected'] as const).map(s => (
-            <button key={s} onClick={() => setFilterStatus(s)} className={`filter-btn px-3 py-1.5 rounded-lg text-xs font-medium capitalize ${filterStatus===s?'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md':'text-slate-500 hover:text-slate-300'}`}>
+            <button key={s} onClick={() => setFilterStatus(s)}
+              className={`filter-btn px-3 py-1.5 rounded-lg text-xs font-medium capitalize ${filterStatus===s?'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md':'text-slate-500 hover:text-slate-300'}`}>
               {s === 'all' ? 'All' : s}
             </button>
           ))}
         </div>
         <div className="flex gap-1 p-1 rounded-xl" style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.06)' }}>
           {(['all','leave','late_checkin','overtime'] as const).map(t => (
-            <button key={t} onClick={() => setFilterType(t)} className={`filter-btn px-3 py-1.5 rounded-lg text-xs font-medium ${filterType===t?'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md':'text-slate-500 hover:text-slate-300'}`}>
+            <button key={t} onClick={() => setFilterType(t)}
+              className={`filter-btn px-3 py-1.5 rounded-lg text-xs font-medium ${filterType===t?'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md':'text-slate-500 hover:text-slate-300'}`}>
               {t === 'all' ? 'All Types' : TYPE_CFG[t].label}
             </button>
           ))}
@@ -327,7 +420,7 @@ export default function AdminTicketsPage() {
       <div className="rounded-2xl overflow-hidden anim-in" style={{ background:'rgba(255,255,255,0.02)', border:'1px solid rgba(99,102,241,0.08)', animationDelay:'0.15s' }}>
         {/* thead */}
         <div className="grid grid-cols-12 px-5 py-3" style={{ borderBottom:'1px solid rgba(255,255,255,0.05)', background:'rgba(255,255,255,0.015)' }}>
-          {[['2','Ticket'],['3','Employee'],['3','Type'],['2','Date'],['2','Status']].map(([cols,label]) => (
+          {[['2','Ticket'],['3','Employee'],['3','Type'],['2','Date'],['2','Status']].map(([cols, label]) => (
             <div key={label} className={`col-span-${cols} text-[9px] font-bold text-slate-600 uppercase tracking-wider ${label==='Status'?'text-right':''} ${label==='Date'?'hidden sm:block':''}`}>{label}</div>
           ))}
         </div>
@@ -350,8 +443,9 @@ export default function AdminTicketsPage() {
             const typeCfg = TYPE_CFG[ticket.type];
             const stCfg   = STATUS_CFG[ticket.status];
             return (
-              <div key={ticket._id} onClick={() => setSelectedTicket(ticket)} className="ticket-row grid grid-cols-12 items-center px-5 py-4"
-                style={{ borderBottom: i < filtered.length-1 ? '1px solid rgba(255,255,255,0.03)' : 'none' }}>
+              <div key={ticket._id} onClick={() => setSelectedTicket(ticket)}
+                className="ticket-row grid grid-cols-12 items-center px-5 py-4"
+                style={{ borderBottom: i < filtered.length - 1 ? '1px solid rgba(255,255,255,0.03)' : 'none' }}>
                 <div className="col-span-2">
                   <span className="text-[11px] font-mono text-slate-500">
                     #{(ticket.ticketId || ticket._id).slice(-8).toUpperCase()}
@@ -388,7 +482,13 @@ export default function AdminTicketsPage() {
       </div>
 
       {selectedTicket && (
-        <DetailModal ticket={selectedTicket} onClose={() => setSelectedTicket(null)} onAction={handleAction} actionLoading={actionLoading} />
+        <DetailModal
+          ticket={selectedTicket}
+          onClose={() => setSelectedTicket(null)}
+          onAction={handleAction}
+          onDelete={handleDelete}
+          actionLoading={actionLoading}
+        />
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 'use client';
 // app/(admin)/admin/layout.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 
@@ -61,17 +61,17 @@ const navItems = [
     activeBg: 'bg-amber-500/10',
   },
   {
-  href: '/admin/scan',
-  label: 'Scan QR',
-  icon: (
-    <svg className="w-[17px] h-[17px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 3.5a.5.5 0 11-1 0 .5.5 0 011 0zM6 6h.01M3 3h5v5H3V3zm13 0h5v5h-5V3zM3 16h5v5H3v-5z" />
-    </svg>
-  ),
-  gradient: 'from-rose-500 to-pink-500',
-  color: 'text-rose-400',
-  activeBg: 'bg-rose-500/10',
-},
+    href: '/admin/scan',
+    label: 'Scan QR',
+    icon: (
+      <svg className="w-[17px] h-[17px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 3.5a.5.5 0 11-1 0 .5.5 0 011 0zM6 6h.01M3 3h5v5H3V3zm13 0h5v5h-5V3zM3 16h5v5H3v-5z" />
+      </svg>
+    ),
+    gradient: 'from-rose-500 to-pink-500',
+    color: 'text-rose-400',
+    activeBg: 'bg-rose-500/10',
+  },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -79,12 +79,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [admin, setAdmin] = useState<Admin | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem('admin');
     if (!stored) { router.push('/admin/signin'); return; }
     setAdmin(JSON.parse(stored));
   }, [router]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleLogout = async () => {
     await fetch('/api/admin/me', { method: 'DELETE' });
@@ -124,11 +138,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   );
 
   return (
-    // KEY FIX: overflow-hidden removed from root, modal portal will use document.body
     <div className="min-h-screen bg-[#080810] flex">
       <style>{`
         @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
-        @keyframes slideInRight { from { transform: translateX(100%); opacity: 0 } to { transform: translateX(0); opacity: 1 } }
+        @keyframes slideInDown { from { opacity: 0; transform: translateY(-8px) } to { opacity: 1; transform: translateY(0) } }
+        @keyframes modalIn { from { opacity: 0; transform: scale(0.95) } to { opacity: 1; transform: scale(1) } }
         .sidebar-item { transition: all 0.18s cubic-bezier(0.4,0,0.2,1); }
         .sidebar-item:hover { transform: translateX(3px); }
         .nav-icon-box { transition: all 0.18s ease; }
@@ -139,6 +153,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.2); border-radius: 3px; }
         .page-enter { animation: fadeIn 0.25s ease both; }
         .sidebar-glow { box-shadow: 1px 0 0 rgba(99,102,241,0.08), inset -1px 0 0 rgba(255,255,255,0.02); }
+        .dropdown-enter { animation: slideInDown 0.18s cubic-bezier(0.4,0,0.2,1) both; }
+        .modal-enter { animation: modalIn 0.2s cubic-bezier(0.4,0,0.2,1) both; }
       `}</style>
 
       {/* Mobile overlay */}
@@ -150,7 +166,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         />
       )}
 
-      {/* ─── SIDEBAR ─── z-index: 30, BELOW modal portal (9999) */}
+      {/* ─── SIDEBAR ─── */}
       <aside
         className={`fixed top-0 left-0 h-screen w-[230px] flex flex-col flex-shrink-0 transition-transform duration-300 ease-out sidebar-glow
           lg:sticky lg:translate-x-0
@@ -244,7 +260,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* ─── MAIN CONTENT ─── */}
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
 
-        {/* Topbar — z-index: 20, BELOW sidebar and modal */}
+        {/* Topbar */}
         <header
           className="glass sticky top-0 flex-shrink-0 flex items-center gap-4 px-5 lg:px-6 py-3.5"
           style={{
@@ -281,16 +297,85 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="flex-1" />
 
           <div className="flex items-center gap-3">
+            {/* Live badge */}
             <div className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full font-semibold" style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.18)', color: '#4ade80' }}>
               <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
               Live
             </div>
-            <div className="hidden sm:flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm">
-                <span className="text-white text-[10px] font-bold">{admin.name?.charAt(0).toUpperCase()}</span>
-              </div>
-              <span className="text-slate-300 text-sm font-medium">{admin.name}</span>
+
+            {/* ─── PROFILE DROPDOWN ─── */}
+            <div className="hidden sm:flex items-center relative" ref={dropdownRef}>
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all hover:bg-white/[0.06]"
+                style={{ border: dropdownOpen ? '1px solid rgba(99,102,241,0.25)' : '1px solid transparent' }}
+              >
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm flex-shrink-0">
+                  <span className="text-white text-[10px] font-bold">{admin.name?.charAt(0).toUpperCase()}</span>
+                </div>
+                <span className="text-slate-300 text-sm font-medium">{admin.name}</span>
+                <svg
+                  className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {/* Dropdown */}
+              {dropdownOpen && (
+                <div
+                  className="dropdown-enter absolute right-0 top-[calc(100%+8px)] w-52 rounded-xl overflow-hidden"
+                  style={{
+                    background: '#0f0f1f',
+                    border: '1px solid rgba(99,102,241,0.18)',
+                    zIndex: 50,
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,102,241,0.06)',
+                  }}
+                >
+                  {/* User info */}
+                  <div className="px-3.5 py-3" style={{ borderBottom: '1px solid rgba(99,102,241,0.1)' }}>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
+                        <span className="text-white text-xs font-bold">{admin.name?.charAt(0).toUpperCase()}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-white text-xs font-semibold truncate">{admin.name}</p>
+                        <p className="text-indigo-400/70 text-[10px] capitalize">{admin.role}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Menu items */}
+                  <div className="p-1.5 space-y-0.5">
+                    <button
+                      onClick={() => { setDropdownOpen(false); setProfileModalOpen(true); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 text-xs font-medium hover:bg-white/[0.06] hover:text-white transition-all text-left"
+                    >
+                      <svg className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                      View Profile
+                    </button>
+
+           
+
+                    <div style={{ borderTop: '1px solid rgba(99,102,241,0.08)', margin: '4px 0' }} />
+
+                    <button
+                      onClick={() => { setDropdownOpen(false); handleLogout(); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-red-400/80 text-xs font-medium hover:bg-red-500/8 hover:text-red-300 transition-all text-left"
+                    >
+                      <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
+            {/* ─── END PROFILE DROPDOWN ─── */}
           </div>
         </header>
 
@@ -307,6 +392,139 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <p className="text-slate-700 text-[11px]">© {new Date().getFullYear()}</p>
         </footer>
       </div>
+
+      {/* ─── PROFILE MODAL ─── */}
+      {profileModalOpen && (
+        <div
+          className="fixed inset-0 flex items-center justify-center glass"
+          style={{ background: 'rgba(0,0,0,0.75)', zIndex: 9999 }}
+          onClick={() => setProfileModalOpen(false)}
+        >
+          <div
+            className="modal-enter w-80 rounded-2xl overflow-hidden"
+            style={{
+              background: 'linear-gradient(180deg, #0f0f20 0%, #0a0a16 100%)',
+              border: '1px solid rgba(99,102,241,0.2)',
+              boxShadow: '0 24px 64px rgba(0,0,0,0.7), 0 0 0 1px rgba(99,102,241,0.08)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              className="relative text-center px-6 pt-8 pb-6"
+              style={{
+                background: 'linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(59,130,246,0.06) 100%)',
+                borderBottom: '1px solid rgba(99,102,241,0.1)',
+              }}
+            >
+              {/* Close button */}
+              <button
+                onClick={() => setProfileModalOpen(false)}
+                className="absolute top-3.5 right-3.5 w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/8 transition-all"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+
+              {/* Avatar */}
+              <div className="relative inline-flex mb-4">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-xl shadow-blue-500/20">
+                  <span className="text-white text-2xl font-bold">{admin.name?.charAt(0).toUpperCase()}</span>
+                </div>
+                <span className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 bg-emerald-400 rounded-full border-2 border-[#0f0f20] shadow-sm shadow-emerald-500/50" />
+              </div>
+
+              <h3 className="text-white font-bold text-base tracking-tight">{admin.name}</h3>
+              <div className="inline-flex items-center gap-1.5 mt-1.5 px-2.5 py-1 rounded-full" style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.2)' }}>
+                <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full" />
+                <span className="text-indigo-300 text-[11px] font-semibold capitalize">{admin.role}</span>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 space-y-2">
+              {[
+                {
+                  label: 'Email',
+                  value: admin.email,
+                  icon: (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                  ),
+                },
+                {
+                  label: 'Role',
+                  value: admin.role,
+                  pill: true,
+                  icon: (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                  ),
+                },
+                {
+                  label: 'Admin ID',
+                  value: `#${admin.id?.slice(0, 8).toUpperCase()}`,
+                  mono: true,
+                  icon: (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" />
+                    </svg>
+                  ),
+                },
+                {
+                  label: 'Status',
+                  value: 'Active',
+                  status: true,
+                  icon: (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  ),
+                },
+              ].map((row) => (
+                <div
+                  key={row.label}
+                  className="flex items-center justify-between px-3 py-2.5 rounded-xl"
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.04)' }}
+                >
+                  <div className="flex items-center gap-2 text-slate-500">
+                    <span className="text-slate-600">{row.icon}</span>
+                    <span className="text-xs">{row.label}</span>
+                  </div>
+                  {row.pill ? (
+                    <span className="text-indigo-300 text-[11px] font-semibold capitalize px-2 py-0.5 rounded-md" style={{ background: 'rgba(99,102,241,0.15)' }}>
+                      {row.value}
+                    </span>
+                  ) : row.status ? (
+                    <span className="flex items-center gap-1.5 text-emerald-400 text-[11px] font-semibold">
+                      <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+                      {row.value}
+                    </span>
+                  ) : (
+                    <span className={`text-slate-300 text-xs font-medium ${row.mono ? 'font-mono text-[11px] text-slate-400' : ''}`}>
+                      {row.value}
+                    </span>
+                  )}
+                </div>
+              ))}
+
+              {/* Close button */}
+              <button
+                onClick={() => setProfileModalOpen(false)}
+                className="w-full mt-2 py-2.5 rounded-xl text-white text-sm font-semibold transition-all hover:opacity-90 active:scale-[0.98]"
+                style={{ background: 'linear-gradient(135deg, #3b82f6, #6366f1)' }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ─── END PROFILE MODAL ─── */}
+
     </div>
   );
 }

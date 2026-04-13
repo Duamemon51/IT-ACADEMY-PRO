@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '../ThemeContext';
 
 type TicketType = 'leave' | 'late_checkin' | 'overtime' | null;
@@ -19,28 +19,25 @@ const BLANK: TicketForm = {
   overtimeDate: '', overtimeFrom: '', overtimeTo: '', overtimeReason: '', overtimeProject: '',
 };
 interface RecentTicket {
-  id: string;       // always _id (mongo)
-  ticketId: string; // TKT-XXXXXX display id
+  id: string;
+  ticketId: string;
   type: string; label: string; date: string; status: 'approved' | 'pending' | 'rejected';
 }
 
 const TICKET_TYPES = [
   {
     id: 'leave' as TicketType, label: 'Leave Request', desc: 'Apply for planned or emergency leave',
-    accent: '#818cf8', accentBg: 'rgba(129,140,248,0.08)', accentBorder: 'rgba(129,140,248,0.2)',
-    glow: 'rgba(129,140,248,0.4)',
+    accent: '#818cf8', accentBg: 'rgba(129,140,248,0.08)', accentBorder: 'rgba(129,140,248,0.2)', glow: 'rgba(129,140,248,0.4)',
     icon: (<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>),
   },
   {
     id: 'late_checkin' as TicketType, label: 'Late Check-in', desc: 'Request time correction for missed punch',
-    accent: '#fbbf24', accentBg: 'rgba(251,191,36,0.08)', accentBorder: 'rgba(251,191,36,0.2)',
-    glow: 'rgba(251,191,36,0.4)',
+    accent: '#fbbf24', accentBg: 'rgba(251,191,36,0.08)', accentBorder: 'rgba(251,191,36,0.2)', glow: 'rgba(251,191,36,0.4)',
     icon: (<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>),
   },
   {
     id: 'overtime' as TicketType, label: 'Overtime Claim', desc: 'Log extra hours worked beyond your schedule',
-    accent: '#34d399', accentBg: 'rgba(52,211,153,0.08)', accentBorder: 'rgba(52,211,153,0.2)',
-    glow: 'rgba(52,211,153,0.4)',
+    accent: '#34d399', accentBg: 'rgba(52,211,153,0.08)', accentBorder: 'rgba(52,211,153,0.2)', glow: 'rgba(52,211,153,0.4)',
     icon: (<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>),
   },
 ];
@@ -54,6 +51,12 @@ const STATUS_CFG = {
   approved: { label: 'Approved', color: '#34d399', bg: 'rgba(52,211,153,0.12)',  border: 'rgba(52,211,153,0.3)',  glow: 'rgba(52,211,153,0.5)' },
   pending:  { label: 'Pending',  color: '#fbbf24', bg: 'rgba(251,191,36,0.12)', border: 'rgba(251,191,36,0.3)',  glow: 'rgba(251,191,36,0.5)' },
   rejected: { label: 'Rejected', color: '#f87171', bg: 'rgba(248,113,113,0.12)',border: 'rgba(248,113,113,0.3)', glow: 'rgba(248,113,113,0.5)' },
+};
+
+const HIGHLIGHT_CFG = {
+  approved: { bg: 'rgba(52,211,153,0.07)',  border: 'rgba(52,211,153,0.25)' },
+  rejected: { bg: 'rgba(248,113,113,0.07)', border: 'rgba(248,113,113,0.25)' },
+  pending:  { bg: '',                        border: '' },
 };
 
 function Field({ label, id, type = 'text', value, onChange, placeholder, required, isDark }: {
@@ -73,6 +76,7 @@ function Field({ label, id, type = 'text', value, onChange, placeholder, require
     </div>
   );
 }
+
 function Textarea({ label, id, value, onChange, placeholder, required, isDark }: {
   label: string; id: string; value: string; onChange: (v: string) => void;
   placeholder?: string; required?: boolean; isDark: boolean;
@@ -90,6 +94,7 @@ function Textarea({ label, id, value, onChange, placeholder, required, isDark }:
     </div>
   );
 }
+
 function Select({ label, id, value, onChange, options, required, isDark }: {
   label: string; id: string; value: string; onChange: (v: string) => void;
   options: { value: string; label: string }[]; required?: boolean; isDark: boolean;
@@ -143,24 +148,20 @@ function TicketModal({ open, onClose, initialType, onSubmitted }: {
       });
       const data = await res.json();
       if (!data.success) throw new Error();
-
       const { _id, ticketId } = data.data;
       setCreatedTicket({ _id, ticketId });
       setStatus('success');
       onSubmitted({
-        id: _id,
-        ticketId: ticketId || `#${_id.slice(-8).toUpperCase()}`,
-        type: form.type!,
-        label: typeMeta?.label ?? '',
-        date: new Date().toISOString().split('T')[0],
-        status: 'pending',
+        id: _id, ticketId: ticketId || `#${_id.slice(-8).toUpperCase()}`,
+        type: form.type!, label: typeMeta?.label ?? '',
+        date: new Date().toISOString().split('T')[0], status: 'pending',
       });
     } catch { alert('Submission failed'); setStatus('idle'); }
   };
 
   const modalBg   = d ? 'bg-[#0c0d14]/98 border-white/[0.1]' : 'bg-white border-slate-200 shadow-2xl';
   const hdrBord   = d ? 'border-white/[0.07]' : 'border-slate-100';
-  const tp        = d ? 'text-white'    : 'text-slate-900';
+  const tp        = d ? 'text-white'     : 'text-slate-900';
   const ts        = d ? 'text-slate-500' : 'text-slate-500';
   const closeBtn  = d ? 'text-slate-600 hover:text-white hover:bg-white/[0.07]' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100';
   const cancelBtn = d ? 'border-white/[0.09] bg-white/[0.04] text-slate-400 hover:bg-white/[0.07]' : 'border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 shadow-sm';
@@ -174,7 +175,6 @@ function TicketModal({ open, onClose, initialType, onSubmitted }: {
         <div className="h-[2px] w-[95%] mx-auto rounded-t-2xl flex-shrink-0"
           style={{ background: typeMeta ? `linear-gradient(90deg,${typeMeta.accent},${typeMeta.accent}40,transparent)` : 'linear-gradient(90deg,#6366f1,#a855f7,transparent)' }} />
 
-        {/* Header */}
         <div className={`flex items-center gap-3.5 px-6 py-4 border-b flex-shrink-0 ${hdrBord}`}>
           {typeMeta
             ? <div className="p-2.5 rounded-xl flex-shrink-0" style={{ background: typeMeta.accentBg, color: typeMeta.accent, border: `1px solid ${typeMeta.accentBorder}`, boxShadow: `0 0 20px ${typeMeta.glow}` }}>{typeMeta.icon}</div>
@@ -191,7 +191,6 @@ function TicketModal({ open, onClose, initialType, onSubmitted }: {
           </button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
           {status === 'success' ? (
             <div className="flex flex-col items-center py-10 text-center">
@@ -201,8 +200,6 @@ function TicketModal({ open, onClose, initialType, onSubmitted }: {
               </div>
               <p className={`text-lg font-black mb-1.5 ${tp}`}>Ticket Raised!</p>
               <p className={`text-sm mb-6 ${ts}`}>Your manager will review within 24 hours.</p>
-
-              {/* Ticket ID display */}
               <div className={`w-full rounded-2xl overflow-hidden border ${d ? 'border-white/[0.08]' : 'border-slate-100'}`}
                 style={{ background: d ? 'rgba(255,255,255,0.02)' : '#f8fafc' }}>
                 <div className="px-4 py-2.5 flex items-center gap-2"
@@ -211,7 +208,6 @@ function TicketModal({ open, onClose, initialType, onSubmitted }: {
                   <span className={`text-[9px] font-bold uppercase tracking-widest ${ts}`}>Your Ticket Reference</span>
                 </div>
                 <div className="px-4 py-4 space-y-3">
-                  {/* Prominent TKT-ID */}
                   <div className="flex items-center justify-between">
                     <span className={`text-[10px] font-bold uppercase tracking-wider ${ts}`}>Ticket ID</span>
                     <span className="font-mono font-black text-base px-3 py-1 rounded-lg"
@@ -219,7 +215,6 @@ function TicketModal({ open, onClose, initialType, onSubmitted }: {
                       {createdTicket?.ticketId ?? '—'}
                     </span>
                   </div>
-                  {/* Mongo ID — smaller, secondary */}
                   <div className="flex items-center justify-between">
                     <span className={`text-[10px] font-bold uppercase tracking-wider ${ts}`}>Reference</span>
                     <span className={`font-mono text-[11px] ${d ? 'text-slate-600' : 'text-slate-400'}`}>
@@ -295,7 +290,6 @@ function TicketModal({ open, onClose, initialType, onSubmitted }: {
           )}
         </div>
 
-        {/* Footer */}
         <div className={`px-6 py-4 border-t flex-shrink-0 flex gap-2.5 ${d ? 'border-white/[0.07]' : 'border-slate-100'}`}>
           {status === 'success' ? (
             <button onClick={onClose} className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all ${cancelBtn}`}>Close</button>
@@ -327,25 +321,81 @@ export default function SupportTicketsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<TicketType>(null);
   const [tickets, setTickets]     = useState<RecentTicket[]>([]);
+  const [justUpdated, setJustUpdated] = useState<Set<string>>(new Set());
+
+  // Stores the last-known status for each ticket id
+  const prevTicketsRef = useRef<Map<string, string>>(new Map());
+  // Always points at the latest fetchTickets — fixes stale closure in setInterval
+  const fetchTicketsRef = useRef<() => Promise<void>>(null!);
 
   const open = (type: TicketType = null) => { setModalType(type); setModalOpen(true); };
 
+  // ✅ useCallback so the function identity is stable; refs handle the rest
+  const fetchTickets = useCallback(async () => {
+    try {
+      const res  = await fetch('/api/employee/tickets', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('employee_token')}` },
+      });
+      const data = await res.json();
+      if (!data.success) return;
+
+      const fetched: RecentTicket[] = data.data.map((t: any) => ({
+        id:       t._id,
+        ticketId: t.ticketId || `#${t._id.slice(-8).toUpperCase()}`,
+        type:     t.type,
+        label:    t.type === 'leave'
+                    ? `${t.leaveType || ''} Leave`
+                    : t.type === 'late_checkin'
+                    ? 'Late Check-in'
+                    : 'Overtime',
+        date:     t.createdAt?.split('T')[0],
+        status:   t.status,
+      }));
+
+      // ✅ Read prevRef BEFORE overwriting it
+      const prev    = prevTicketsRef.current;
+      const changed = new Set<string>();
+
+      fetched.forEach(t => {
+        const oldStatus = prev.get(t.id);
+        // Highlight only when status changed away from pending
+        if (oldStatus && oldStatus !== t.status && t.status !== 'pending') {
+          changed.add(t.id);
+        }
+      });
+
+      // ✅ Overwrite AFTER comparison
+      prevTicketsRef.current = new Map(fetched.map(t => [t.id, t.status]));
+
+      setTickets(fetched);
+
+      if (changed.size > 0) {
+        setJustUpdated(changed);
+        setTimeout(() => setJustUpdated(new Set()), 6000);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, []); // empty deps — stable reference, no stale closure risk
+
+  // ✅ Keep the ref always pointing at the latest version of fetchTickets
   useEffect(() => {
-    (async () => {
-      try {
-        const res  = await fetch('/api/employee/tickets', { headers: { Authorization: `Bearer ${localStorage.getItem('employee_token')}` } });
-        const data = await res.json();
-        if (data.success) setTickets(data.data.map((t: any) => ({
-          id:       t._id,
-          ticketId: t.ticketId || `#${t._id.slice(-8).toUpperCase()}`,
-          type:     t.type,
-          label:    t.type === 'leave' ? `${t.leaveType || ''} Leave` : t.type === 'late_checkin' ? 'Late Check-in' : 'Overtime',
-          date:     t.createdAt?.split('T')[0],
-          status:   t.status,
-        })));
-      } catch (err) { console.error(err); }
-    })();
-  }, []);
+    fetchTicketsRef.current = fetchTickets;
+  }, [fetchTickets]);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchTickets();
+  }, [fetchTickets]);
+
+  // ✅ Poll via ref — interval always calls the latest fetchTickets, never a stale copy
+  // Reduced from 30s → 8s so the highlight fires quickly after admin acts
+  useEffect(() => {
+    const id = setInterval(() => {
+      fetchTicketsRef.current();
+    }, 8_000);
+    return () => clearInterval(id);
+  }, []); // safe: interval calls through the ref, not a closure variable
 
   const tp    = d ? 'text-white'     : 'text-slate-900';
   const ts    = d ? 'text-slate-500' : 'text-slate-500';
@@ -357,6 +407,24 @@ export default function SupportTicketsPage() {
 
   return (
     <div className="space-y-6" style={{ fontFamily: "'DM Sans',system-ui,sans-serif" }}>
+      <style>{`
+        @keyframes statusFlash {
+          0%   { opacity: 1; transform: scale(1); }
+          15%  { opacity: 0.7; transform: scale(1.015); }
+          30%  { opacity: 1; transform: scale(1); }
+          50%  { opacity: 0.8; transform: scale(1.008); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .status-flash { animation: statusFlash 0.7s ease both; }
+
+        @keyframes rowPulse {
+          0%,100% { box-shadow: none; }
+          40%     { box-shadow: 0 0 0 2px var(--pulse-color); }
+        }
+        .row-pulse { animation: rowPulse 1.4s ease 3; }
+
+        @keyframes modalIn{from{opacity:0;transform:scale(0.94) translateY(12px)}to{opacity:1;transform:scale(1) translateY(0)}}
+      `}</style>
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
@@ -414,7 +482,6 @@ export default function SupportTicketsPage() {
         <div className={`rounded-2xl border overflow-hidden transition-all duration-300 ${card}`}
           style={{ boxShadow: d ? '0 4px 24px rgba(0,0,0,0.35)' : '0 2px 12px rgba(0,0,0,0.06)' }}>
 
-          {/* Table header */}
           <div className={`hidden sm:grid grid-cols-12 px-6 py-3 border-b ${thBg}`}>
             {[['Ticket ID', 'col-span-3'], ['Type', 'col-span-4'], ['Date', 'col-span-3'], ['Status', 'col-span-2 text-right']].map(([h, c]) => (
               <div key={h} className={`${c} text-[9px] font-bold tracking-[0.25em] ${ts} uppercase`}>{h}</div>
@@ -431,28 +498,53 @@ export default function SupportTicketsPage() {
             </div>
           ) : (
             tickets.map((tk, i) => {
-              const meta = TYPE_META[tk.type];
-              const st   = STATUS_CFG[tk.status];
+              const meta       = TYPE_META[tk.type];
+              const st         = STATUS_CFG[tk.status];
+              const isNew      = justUpdated.has(tk.id);
+              const highlight  = isNew ? HIGHLIGHT_CFG[tk.status] : null;
+              const pulseColor = tk.status === 'approved'
+                ? 'rgba(52,211,153,0.5)'
+                : 'rgba(248,113,113,0.5)';
+
               return (
-                <div key={tk.id} className={`grid grid-cols-12 items-center px-6 py-4 transition-all ${hover} ${i < tickets.length - 1 ? `border-b ${div}` : ''}`}>
-                  {/* Ticket ID — show TKT-XXXXXX prominently */}
+                <div key={tk.id}
+                  className={`grid grid-cols-12 items-center px-6 py-4 transition-all duration-500 ${hover} ${i < tickets.length - 1 ? `border-b ${div}` : ''} ${isNew ? 'row-pulse' : ''}`}
+                  style={{
+                    background:  highlight?.bg     || '',
+                    borderColor: highlight?.border  || '',
+                    ['--pulse-color' as any]: pulseColor,
+                  }}>
+
+                  {/* Ticket ID */}
                   <div className="col-span-3">
                     <span className="font-mono font-bold text-[12px] px-2 py-0.5 rounded-lg"
                       style={{ background: 'rgba(129,140,248,0.1)', color: '#818cf8', border: '1px solid rgba(129,140,248,0.2)' }}>
                       {tk.ticketId}
                     </span>
                   </div>
+
+                  {/* Type */}
                   <div className="col-span-4">
                     <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full border"
                       style={{ background: meta?.bg, borderColor: meta?.border, color: meta?.accent }}>
                       {meta?.label ?? tk.type}
                     </span>
                   </div>
+
+                  {/* Date */}
                   <div className="col-span-3 hidden sm:block">
                     <span className={`text-[11px] font-mono ${tt}`}>{tk.date}</span>
                   </div>
-                  <div className="col-span-2 flex justify-end">
-                    <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full border inline-flex items-center gap-1.5"
+
+                  {/* Status */}
+                  <div className="col-span-2 flex justify-end items-center gap-2">
+                    {isNew && (
+                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full status-flash"
+                        style={{ background: st.bg, color: st.color, border: `1px solid ${st.border}` }}>
+                        Updated!
+                      </span>
+                    )}
+                    <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border inline-flex items-center gap-1.5 ${isNew ? 'status-flash' : ''}`}
                       style={{ background: st.bg, borderColor: st.border, color: st.color }}>
                       <span className="w-1.5 h-1.5 rounded-full" style={{ background: st.color, boxShadow: `0 0 6px ${st.glow}` }} />
                       {st.label}
@@ -465,7 +557,16 @@ export default function SupportTicketsPage() {
         </div>
       </div>
 
-      <TicketModal open={modalOpen} onClose={() => setModalOpen(false)} initialType={modalType} onSubmitted={t => setTickets(p => [t, ...p])} />
+      <TicketModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        initialType={modalType}
+        onSubmitted={t => {
+          setTickets(p => [t, ...p]);
+          // Register the new ticket in prevRef so future polls can detect its status change
+          prevTicketsRef.current.set(t.id, t.status);
+        }}
+      />
     </div>
   );
 }
